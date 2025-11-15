@@ -1,7 +1,10 @@
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { GraphQLModule } from '@nestjs/graphql';
 import { configValidationSchema } from './config.schema';
 import { DatabaseModule } from './database/database.module';
+import { OrganizationModule } from './modules/organizations/organization.module';
 
 @Module({
   imports: [
@@ -13,7 +16,15 @@ import { DatabaseModule } from './database/database.module';
       ],
       validationSchema: configValidationSchema,
     }),
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      autoSchemaFile: true,
+      introspection: true,
+      playground: true,
+      driver: ApolloDriver,
+      resolvers: {},
+    }),
     DatabaseModule,
+    OrganizationModule,
   ],
   controllers: [],
   providers: [],
