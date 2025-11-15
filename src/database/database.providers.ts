@@ -1,0 +1,27 @@
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+
+/**
+ * Setup default connection in the application
+ * @param config {ConfigService}
+ */
+const defaultPostgresDBConnection = (
+  configService: ConfigService,
+): TypeOrmModuleOptions => ({
+  type: 'postgres',
+  autoLoadEntities: true,
+  synchronize: configService.get('NODE_ENV') !== 'production',
+  url: configService.get('DATABASE_URL'),
+  entities: [__dirname + '/entities/*.entity{.ts,.js}'],
+  ssl: {
+    rejectUnauthorized: false, // allow self-signed AWS certs
+  },
+});
+
+export const databaseProviders = [
+  TypeOrmModule.forRootAsync({
+    imports: [ConfigModule],
+    inject: [ConfigService],
+    useFactory: defaultPostgresDBConnection,
+  }),
+];
