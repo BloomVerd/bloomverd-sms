@@ -63,5 +63,7 @@ describe('OrganizationService', () => {
     await module.close();
   });
 
-  describe('registerOrganization', () => {});
+  describe('registerOrganization', () => {
+    console.log('tests to be written', authService);
+  });
 });
