@@ -5,6 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { entities } from 'src/database/entities';
 import { AuthResolver } from './auth/auth.resolver';
 import { AuthService } from './auth/auth.service';
+import { OrgResolver } from './org/org.resolver';
+import { OrgService } from './org/org.service';
 
 @Module({
   imports: [
@@ -22,6 +24,6 @@ import { AuthService } from './auth/auth.service';
     TypeOrmModule.forFeature(entities),
   ],
   controllers: [],
-  providers: [AuthResolver, AuthService],
+  providers: [AuthResolver, AuthService, OrgResolver, OrgService],
 })
 export class OrganizationModule {}
