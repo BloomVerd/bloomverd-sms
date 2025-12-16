@@ -1,7 +1,8 @@
 import { Field, InputType } from '@nestjs/graphql';
+import { Gender } from 'src/database/entities/lecturer.entity';
 
 @InputType()
-export class CreateLecturereInput {
+export class CreateLecturerInput {
   @Field()
   email: string;
 
@@ -12,10 +13,10 @@ export class CreateLecturereInput {
   lastName: string;
 
   @Field()
-  facultyId: string;
+  password: string;
 
   @Field()
-  gender: string;
+  gender: Gender;
 
   @Field()
   phoneNumber: string;
@@ -24,8 +25,5 @@ export class CreateLecturereInput {
   address: string;
 
   @Field()
-  dateOfBirth: string;
-
-  @Field()
-  fieldOfExpertise: string;
+  dateOfBirth: Date;
 }

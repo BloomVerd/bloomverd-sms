@@ -1,17 +1,32 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Connection } from 'typeorm';
-import { entities } from '../../../database/entities';
+import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
+import { Connection, Repository } from 'typeorm';
+import {
+  Class,
+  College,
+  Department,
+  entities,
+  Faculty,
+  Lecturer,
+  Organization,
+} from '../../../database/entities';
+import { Gender } from '../../../database/entities/lecturer.entity';
+import { HashHelper } from '../../../shared/helpers';
 import { OrgService } from './org.service';
-import { NotFoundException } from '@nestjs/common';
 
 describe('OrganizationService', () => {
   let module: TestingModule;
   let connection: Connection;
 
   let orgService: OrgService;
+  let orgRepository: Repository<Organization>;
+  let collegeRepository: Repository<College>;
+  let facultyRepository: Repository<Faculty>;
+  let departmentRepository: Repository<Department>;
+  let lecturerRepository: Repository<Lecturer>;
+  let classRepository: Repository<Class>;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -47,6 +62,22 @@ describe('OrganizationService', () => {
 
     connection = module.get<Connection>(Connection);
     orgService = module.get<OrgService>(OrgService);
+    orgRepository = module.get<Repository<Organization>>(
+      getRepositoryToken(Organization),
+    );
+    collegeRepository = module.get<Repository<College>>(
+      getRepositoryToken(College),
+    );
+    facultyRepository = module.get<Repository<Faculty>>(
+      getRepositoryToken(Faculty),
+    );
+    departmentRepository = module.get<Repository<Department>>(
+      getRepositoryToken(Department),
+    );
+    lecturerRepository = module.get<Repository<Lecturer>>(
+      getRepositoryToken(Lecturer),
+    );
+    classRepository = module.get<Repository<Class>>(getRepositoryToken(Class));
   });
 
   beforeEach(async () => {
@@ -64,90 +95,275 @@ describe('OrganizationService', () => {
     await module.close();
   });
 
-  describe('createOrganizationCollege', () => {
-    it('Create a new College linked to an Organization', async () => {
-      const collegeData = {
-        name: 'Test College',
-        organizationId: 'org-123',
-        email: 'college@gmail.com',
+  describe('createColleges', () => {
+    it('Create bulk colleges linked to an Organization', async () => {
+      const { organization } = await setupData();
 
-        // other college properties
-      };
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+      });
 
-      const college = await orgService.createOrganizationCollege(collegeData);
+      const organization_colleges = await getOrganizationColleges(
+        organization.email,
+      );
 
-      expect(college).toBeDefined();
-      expect(college.name).toBe(collegeData.name);
-      expect(college.email).toBe(collegeData.email);
-      expect(college.organizationId).toBe(collegeData.organizationId);
-    });
-
-    it('should throw an error if organization does not exist', async () => {
-      const nonExistentOrgId = 'non-existent-id';
-      const collegeData = {
-        name: 'Test College',
-        organizationId: nonExistentOrgId,
-        email: 'college@gmail.com',
-      };
-
-      await expect(
-        orgService.createOrganizationCollege(collegeData),
-      ).rejects.toThrow(NotFoundException);
+      expect(colleges.length).toEqual(organization_colleges.length);
+      expect(colleges.pop()?.organization.id).toBe(organization.id);
     });
   });
 
-  describe('createOrganizationDepartment', () => {
-    it('Create a new Department linked to a Faculty', async () => {
-      const departmentData = {
-        name: 'Test Department',
-        facultyId: 'faculty-123',
-        email: 'department@gmail.com',
-      };
+  describe('createFaculties', () => {
+    it('Create bulk faculties linked to a college', async () => {
+      const { organization } = await setupData();
 
-      const response =
-        await orgService.createOrganizationDepartment(departmentData);
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
 
-      expect(response).toBeDefined();
-    });
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: facultyData,
+      });
 
-    it('should throw an error if faculty does not exist', async () => {
-      const nonExistentFacultyId = 'non-existent-id';
-      const departmentData = {
-        name: 'Test Department',
-        facultyId: nonExistentFacultyId,
-        email: 'department@gmail.com',
-      };
+      const college_faculties = await getCollegeFaculties(colleges[0].email);
 
-      await expect(
-        orgService.createOrganizationDepartment(departmentData),
-      ).rejects.toThrow(NotFoundException);
+      expect(faculties.length).toEqual(college_faculties.length);
+      expect(faculties.pop()?.college.id).toBe(colleges[0].id);
     });
   });
 
-  describe('createOrganizationFaculty', () => {
-    it('Create a new Faculty linked to a College', async () => {
-      const facultyData = {
-        name: 'Test Faculty',
-        collegeId: 'college-123',
-        email: 'faculty@gmail.com',
-      };
+  describe('createDepartments', () => {
+    it('Create bulk departments linked to a faculty', async () => {
+      const { organization } = await setupData();
 
-      const response = await orgService.createOrganizationFaculty(facultyData);
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
 
-      expect(response).toBeDefined();
-    });
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
 
-    it('should throw an error if college does not exist', async () => {
-      const nonExistentCollegeId = 'non-existent-id';
-      const facultyData = {
-        name: 'Test Faculty',
-        collegeId: nonExistentCollegeId,
-        email: 'faculty@gmail.com',
-      };
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: departmentData,
+      });
 
-      await expect(
-        orgService.createOrganizationFaculty(facultyData),
-      ).rejects.toThrow(NotFoundException);
+      const faculty_departments = await getFacultyDepartments(
+        faculties[0].email,
+      );
+
+      expect(departments.length).toEqual(faculty_departments.length);
+      expect(departments.pop()?.faculty.id).toBe(faculties[0].id);
     });
   });
+
+  describe('createLecturers', () => {
+    it('Create bulk lecturers linked to a organization', async () => {
+      const { organization } = await setupData();
+
+      const lecturers = await orgService.createLecturers({
+        organizationEmail: organization.email,
+        lecturers: lecturerData,
+      });
+
+      const organization_lecturers = await getOrganizationLecturers(
+        organization.email,
+      );
+
+      expect(lecturers.length).toEqual(organization_lecturers.length);
+      expect(lecturers.pop()?.organization.id).toBe(organization.id);
+    });
+  });
+
+  describe('assignLecturersToDepartment', () => {
+    it('Assign bulk lecturers to a department', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const lecturers = await orgService.createLecturers({
+        organizationEmail: organization.email,
+        lecturers: lecturerData,
+      });
+
+      const updated_lecturers = await orgService.assignLecturersToDepartment({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        lecturerIds: lecturers.map((lecturer) => lecturer.id),
+      });
+
+      const response = await getOrganizationLecturers(organization.email);
+
+      expect(updated_lecturers.length).toEqual(response.length);
+      expect(response[0]?.departments[0].id).toBe(departments[0].id);
+      expect(response[1]?.departments[0].id).toBe(departments[0].id);
+    });
+  });
+
+  describe('createDepartmentClasses', () => {
+    it('Create bulk classes to a department', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: classData,
+      });
+
+      const dep_classes = await getDepartmentClasses(departments[0].email);
+
+      expect(dep_classes.length).toEqual(classes.length);
+      expect(dep_classes[0].department.id).toBe(departments[0].id);
+    });
+  });
+
+  // DATA
+  const collegesData = [
+    {
+      name: 'Test College',
+      email: 'college@gmail.com',
+      password: 'password',
+    },
+    {
+      name: 'Test Colleges',
+      email: 'college1@gmail.com',
+      password: 'password',
+    },
+  ];
+
+  const facultyData = [
+    {
+      name: 'Test Faculty',
+      email: 'faculty@gmail.com',
+      password: 'password',
+    },
+    {
+      name: 'Test Facultys',
+      email: 'faculty1@gmail.com',
+      password: 'password',
+    },
+  ];
+
+  const departmentData = [
+    {
+      name: 'Test Department',
+      email: 'department@gmail.com',
+      password: 'password',
+    },
+    {
+      name: 'Test Departments',
+      email: 'department1@gmail.com',
+      password: 'password',
+    },
+  ];
+
+  const lecturerData = [
+    {
+      email: 'lecture1@gmail.com',
+      firstName: 'Lecturer',
+      lastName: 'One',
+      gender: Gender.MALE,
+      phoneNumber: '0550815604',
+      address: 'address',
+      dateOfBirth: new Date(),
+      password: 'password',
+    },
+    {
+      email: 'lecture2@gmail.com',
+      firstName: 'Lecturer',
+      lastName: 'Two',
+      gender: Gender.MALE,
+      phoneNumber: '0550815605',
+      address: 'address',
+      dateOfBirth: new Date(),
+      password: 'password',
+    },
+  ];
+
+  const classData = [
+    {
+      name: 'biomed class 2025',
+    },
+    {
+      name: 'biomed class 2026',
+    },
+  ];
+
+  // HELPER FXN
+  const setupData = async () => {
+    const organization = new Organization();
+    organization.email = 'test@gmail.com';
+    organization.password = await HashHelper.encrypt('password');
+    await orgRepository.save(organization);
+
+    return { organization };
+  };
+
+  const getOrganizationColleges = async (email: string) => {
+    return collegeRepository.find({
+      where: { organization: { email } },
+      relations: ['organization'],
+    });
+  };
+
+  const getCollegeFaculties = async (email: string) => {
+    return facultyRepository.find({
+      where: { college: { email } },
+      relations: ['college'],
+    });
+  };
+
+  const getFacultyDepartments = async (email: string) => {
+    return departmentRepository.find({
+      where: { faculty: { email } },
+      relations: ['faculty'],
+    });
+  };
+
+  const getOrganizationLecturers = async (email: string) => {
+    return lecturerRepository.find({
+      where: { organization: { email } },
+      relations: ['organization', 'departments'],
+    });
+  };
+
+  const getDepartmentClasses = async (email: string) => {
+    return classRepository.find({
+      where: { department: { email } },
+      relations: ['department'],
+    });
+  };
 });

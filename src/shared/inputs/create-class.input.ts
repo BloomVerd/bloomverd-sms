@@ -4,7 +4,4 @@ import { Field, InputType } from '@nestjs/graphql';
 export class CreateClassInput {
   @Field()
   name: string;
-
-  @Field()
-  departmentId: string;
 }

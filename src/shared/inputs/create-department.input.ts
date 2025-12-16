@@ -9,5 +9,5 @@ export class CreateDepartmentInput {
   name: string;
 
   @Field()
-  facultyId: string;
+  password: string;
 }
