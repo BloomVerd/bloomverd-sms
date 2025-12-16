@@ -1,4 +1,10 @@
-import { Entity, ManyToMany, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToMany,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Class } from './class.entity';
 import { Course } from './course.entity';
 
@@ -6,6 +12,9 @@ import { Course } from './course.entity';
 export class Semester {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column()
+  semester_number: number;
 
   @ManyToOne(() => Class, (cls) => cls.semesters)
   class: Class;

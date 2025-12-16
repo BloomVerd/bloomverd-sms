@@ -8,14 +8,18 @@ import {
   Faculty,
   Lecturer,
   Organization,
+  Semester,
+  Student,
 } from '../../../database/entities';
 import { HashHelper } from '../../../shared/helpers';
 import {
   CreateClassInput,
+  CreateClassSemesterInput,
   CreateCollegeInput,
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
+  CreateStudentInput,
   PaginationInput,
 } from '../../../shared/inputs';
 
@@ -34,6 +38,8 @@ export class OrgService {
     private lecturerRepository: Repository<Lecturer>,
     @InjectRepository(Class)
     private classRepository: Repository<Class>,
+    @InjectRepository(Semester)
+    private semesterRepository: Repository<Semester>,
   ) {}
 
   async listOrganizationCollegePaginated({
@@ -390,6 +396,126 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_classes);
+      },
+    );
+  }
+
+  async createClassSemesters({
+    organizationEmail,
+    classId,
+    numOfSemesters = 8,
+  }: {
+    organizationEmail: string;
+    classId: string;
+    numOfSemesters?: number;
+  }) {
+    return await this.semesterRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the class we are creating the semesters for
+        const dep_class = await transactionalEntityManager.findOne(Class, {
+          where: {
+            id: classId,
+            department: {
+              faculty: {
+                college: {
+                  organization: {
+                    email: organizationEmail,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // THROW an error if that class does not exist
+        if (!dep_class) {
+          this.logger.error('Class not found!');
+          throw new BadRequestException('Class not found!');
+        }
+
+        // CREATE new semesters for class
+        const semesters = [];
+
+        for (let i = 1; i < numOfSemesters + 1; i++) {
+          semesters.push(i);
+        }
+
+        const new_semesters: Semester[] = await Promise.all(
+          semesters.map(async (sem_num) => {
+            const new_semester = new Semester();
+            new_semester.semester_number = sem_num;
+            new_semester.class = dep_class;
+            return new_semester;
+          }),
+        );
+
+        // PERFORM bulk save for new_semesters
+        this.logger.log(
+          `Created ${new_semesters.length} semester(s) for class: ${dep_class.name} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_semesters);
+      },
+    );
+  }
+
+  async createClassStudents({
+    organizationEmail,
+    classId,
+    students,
+  }: {
+    organizationEmail: string;
+    classId: string;
+    students: CreateStudentInput[];
+  }) {
+    return await this.classRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the class we are creating the students for
+        const dep_class = await transactionalEntityManager.findOne(Class, {
+          where: {
+            id: classId,
+            department: {
+              faculty: {
+                college: {
+                  organization: {
+                    email: organizationEmail,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // THROW an error if that class does not exist
+        if (!dep_class) {
+          this.logger.error('Class not found!');
+          throw new BadRequestException('Class not found!');
+        }
+
+        // CREATE new classes for faculty
+        const new_students: Student[] = await Promise.all(
+          students.map(async (student) => {
+            const new_student = new Student();
+            new_student.first_name = student.firstName;
+            new_student.last_name = student.lastName;
+            new_student.email = student.email;
+            new_student.date_of_birth = student.dateOfBirth;
+            new_student.gender = student.gender;
+            new_student.address = student.address;
+            new_student.phone_number = student.phoneNumber;
+
+            new_student.class = dep_class;
+
+            return new_student;
+          }),
+        );
+
+        // PERFORM bulk save for new_students
+        this.logger.log(
+          `Created ${new_students.length} student(s) for department: ${dep_class.name} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_students);
       },
     );
   }

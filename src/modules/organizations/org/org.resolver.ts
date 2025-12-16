@@ -7,7 +7,7 @@ import {
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
-  createStudentInput,
+  CreateStudentInput,
   PaginationInput,
 } from 'src/shared/inputs';
 import {
@@ -191,7 +191,7 @@ export class OrgResolver {
 
   @Mutation(() => RegisterResponseType)
   async createStudent(
-    @Args('input') input: createStudentInput,
+    @Args('input') input: CreateStudentInput,
   ): Promise<RegisterResponseType> {
     console.log(input);
     return {
