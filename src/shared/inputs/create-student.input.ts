@@ -1,7 +1,8 @@
 import { Field, InputType } from '@nestjs/graphql';
+import { Gender } from 'src/database/entities/lecturer.entity';
 
 @InputType()
-export class createStudentInput {
+export class CreateStudentInput {
   @Field()
   firstName: string;
 
@@ -12,10 +13,10 @@ export class createStudentInput {
   email: string;
 
   @Field()
-  dateOfBirth: string;
+  dateOfBirth: Date;
 
   @Field()
-  gender: string;
+  gender: Gender;
 
   @Field()
   address: string;

@@ -11,6 +11,8 @@ import {
   Faculty,
   Lecturer,
   Organization,
+  Semester,
+  Student,
 } from '../../../database/entities';
 import { Gender } from '../../../database/entities/lecturer.entity';
 import { HashHelper } from '../../../shared/helpers';
@@ -27,6 +29,8 @@ describe('OrganizationService', () => {
   let departmentRepository: Repository<Department>;
   let lecturerRepository: Repository<Lecturer>;
   let classRepository: Repository<Class>;
+  let semesterRepository: Repository<Semester>;
+  let studentRepository: Repository<Student>;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -78,6 +82,12 @@ describe('OrganizationService', () => {
       getRepositoryToken(Lecturer),
     );
     classRepository = module.get<Repository<Class>>(getRepositoryToken(Class));
+    semesterRepository = module.get<Repository<Semester>>(
+      getRepositoryToken(Semester),
+    );
+    studentRepository = module.get<Repository<Student>>(
+      getRepositoryToken(Student),
+    );
   });
 
   beforeEach(async () => {
@@ -250,6 +260,86 @@ describe('OrganizationService', () => {
     });
   });
 
+  describe('createClassSemesters', () => {
+    it('Create bulk semesters for a class', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      const semesters = await orgService.createClassSemesters({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+      });
+
+      const class_semesters = await getClassSemesters(classes[0].id);
+
+      expect(class_semesters.length).toEqual(semesters.length);
+      expect(class_semesters[0].class.id).toBe(classes[0].id);
+    });
+  });
+
+  describe('createClassStudents', () => {
+    it('Create bulk students for a class', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      await orgService.createClassSemesters({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+      });
+
+      const students = await orgService.createClassStudents({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+        students: studentData,
+      });
+
+      const class_students = await getClassStudents(classes[0].id);
+
+      expect(class_students.length).toEqual(students.length);
+      expect(class_students[0].class.id).toBe(classes[0].id);
+    });
+  });
+
   // DATA
   const collegesData = [
     {
@@ -322,6 +412,29 @@ describe('OrganizationService', () => {
     },
   ];
 
+  const studentData = [
+    {
+      email: 'student1@gmail.com',
+      firstName: 'Student',
+      lastName: 'One',
+      gender: Gender.MALE,
+      phoneNumber: '0550815604',
+      address: 'address',
+      dateOfBirth: new Date(),
+      password: 'password',
+    },
+    {
+      email: 'student2@gmail.com',
+      firstName: 'Student',
+      lastName: 'Two',
+      gender: Gender.MALE,
+      phoneNumber: '0550815605',
+      address: 'address',
+      dateOfBirth: new Date(),
+      password: 'password',
+    },
+  ];
+
   // HELPER FXN
   const setupData = async () => {
     const organization = new Organization();
@@ -364,6 +477,20 @@ describe('OrganizationService', () => {
     return classRepository.find({
       where: { department: { email } },
       relations: ['department'],
+    });
+  };
+
+  const getClassSemesters = async (id: string) => {
+    return semesterRepository.find({
+      where: { class: { id } },
+      relations: ['class'],
+    });
+  };
+
+  const getClassStudents = async (id: string) => {
+    return studentRepository.find({
+      where: { class: { id } },
+      relations: ['class'],
     });
   };
 });
