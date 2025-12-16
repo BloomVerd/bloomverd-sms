@@ -9,5 +9,5 @@ export class CreateCollegeInput {
   name: string;
 
   @Field()
-  organizationId: string;
+  password: string;
 }

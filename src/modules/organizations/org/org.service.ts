@@ -1,52 +1,39 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import {
+  Class,
   College,
   Department,
   Faculty,
-  Organization,
-  Class,
   Lecturer,
-  Course,
-  Semester,
-  Student,
-} from 'src/database/entities';
-import { ILike, Repository } from 'typeorm';
-
+  Organization,
+} from '../../../database/entities';
+import { HashHelper } from '../../../shared/helpers';
 import {
   CreateClassInput,
-  CreateClassSemesterInput,
   CreateCollegeInput,
-  CreateCourseInput,
-  CreateFacultyInput,
-  createStudentInput,
   CreateDepartmentInput,
-  CreateLecturereInput,
+  CreateFacultyInput,
+  CreateLecturerInput,
   PaginationInput,
-} from 'src/shared/inputs';
-import { CollegeType } from 'src/shared/types';
+} from '../../../shared/inputs';
 
 @Injectable()
 export class OrgService {
+  private readonly logger = new Logger(OrgService.name);
+
   constructor(
-    @InjectRepository(Organization)
-    private organizationRepository: Repository<Organization>,
     @InjectRepository(College)
     private collegeRepository: Repository<College>,
     @InjectRepository(Faculty)
     private facultyRepository: Repository<Faculty>,
     @InjectRepository(Department)
     private departmentRepository: Repository<Department>,
-    @InjectRepository(Class)
-    private classRepository: Repository<Class>,
     @InjectRepository(Lecturer)
     private lecturerRepository: Repository<Lecturer>,
-    @InjectRepository(Course)
-    private courseRepository: Repository<Course>,
-    @InjectRepository(Semester)
-    private semesterRepository: Repository<Semester>,
-    @InjectRepository(Student)
-    private studentRepository: Repository<Student>,
+    @InjectRepository(Class)
+    private classRepository: Repository<Class>,
   ) {}
 
   async listOrganizationCollegePaginated({
@@ -82,6 +69,329 @@ export class OrgService {
       },
       relations: ['organization', 'faculties'],
     });
+  }
+
+  async createColleges({
+    organizationEmail,
+    colleges,
+  }: {
+    organizationEmail: string;
+    colleges: CreateCollegeInput[];
+  }) {
+    return await this.collegeRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the organization creating the colleges
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        // CREATE new college for organization
+        const new_colleges: College[] = await Promise.all(
+          colleges.map(async (college) => {
+            const new_college = new College();
+            new_college.email = college.email;
+            new_college.name = college.name;
+            new_college.password = await HashHelper.encrypt(college.password);
+            new_college.organization = organization;
+
+            return new_college;
+          }),
+        );
+
+        // PERFORM bulk save for new_colleges
+        this.logger.log(
+          `Created ${new_colleges.length} college(s) successfully`,
+        );
+        return transactionalEntityManager.save(new_colleges);
+      },
+    );
+  }
+
+  async createFaculties({
+    collegeEmail,
+    faculties,
+  }: {
+    collegeEmail: string;
+    faculties: CreateFacultyInput[];
+  }) {
+    return await this.facultyRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the college creating the faculties
+        const college = await transactionalEntityManager.findOne(College, {
+          where: {
+            email: collegeEmail,
+          },
+        });
+
+        // THROW an error if that college does not exist
+        if (!college) {
+          this.logger.error('College not found!');
+          throw new BadRequestException('College not found!');
+        }
+
+        // CREATE new faculties for organization
+        const new_faculties: Faculty[] = await Promise.all(
+          faculties.map(async (faculty) => {
+            const new_faculty = new Faculty();
+            new_faculty.email = faculty.email;
+            new_faculty.name = faculty.name;
+            new_faculty.password = await HashHelper.encrypt(faculty.password);
+            new_faculty.college = college;
+
+            return new_faculty;
+          }),
+        );
+
+        // PERFORM bulk save for new_faculties
+        this.logger.log(
+          `Created ${new_faculties.length} faculties(s) for college: ${college.name} successfully`,
+        );
+        return transactionalEntityManager.save(new_faculties);
+      },
+    );
+  }
+
+  async createDepartments({
+    facultyEmail,
+    departments,
+  }: {
+    facultyEmail: string;
+    departments: CreateDepartmentInput[];
+  }) {
+    return await this.departmentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the faculty creating the departments
+        const faculty = await transactionalEntityManager.findOne(Faculty, {
+          where: {
+            email: facultyEmail,
+          },
+        });
+
+        // THROW an error if that faculty does not exist
+        if (!faculty) {
+          this.logger.error('Faculty not found!');
+          throw new BadRequestException('Faculty not found!');
+        }
+
+        // CREATE new departments for faculty
+        const new_departments: Department[] = await Promise.all(
+          departments.map(async (department) => {
+            const new_department = new Department();
+            new_department.email = department.email;
+            new_department.name = department.name;
+            new_department.password = await HashHelper.encrypt(
+              department.password,
+            );
+            new_department.faculty = faculty;
+
+            return new_department;
+          }),
+        );
+
+        // PERFORM bulk save for new_departments
+        this.logger.log(
+          `Created ${new_departments.length} department(s) for faculty: ${faculty.name} successfully`,
+        );
+        return transactionalEntityManager.save(new_departments);
+      },
+    );
+  }
+
+  async createLecturers({
+    organizationEmail,
+    lecturers,
+  }: {
+    organizationEmail: string;
+    lecturers: CreateLecturerInput[];
+  }) {
+    return await this.lecturerRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the organization creating the lecturers
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        // CREATE new college for organization
+        const new_lecturers: Lecturer[] = await Promise.all(
+          lecturers.map(async (lecturer) => {
+            const new_lecturer = new Lecturer();
+            new_lecturer.email = lecturer.email;
+            new_lecturer.first_name = lecturer.firstName;
+            new_lecturer.last_name = lecturer.lastName;
+            new_lecturer.gender = lecturer.gender;
+            new_lecturer.phone_number = lecturer.phoneNumber;
+            new_lecturer.address = lecturer.address;
+            new_lecturer.date_of_birth = lecturer.dateOfBirth;
+            new_lecturer.organization = organization;
+            new_lecturer.password = await HashHelper.encrypt(lecturer.password);
+
+            return new_lecturer;
+          }),
+        );
+
+        // PERFORM bulk save for new_colleges
+        this.logger.log(
+          `Created ${new_lecturers.length} lecturer(s) successfully`,
+        );
+        return transactionalEntityManager.save(new_lecturers);
+      },
+    );
+  }
+
+  async assignLecturersToDepartment({
+    organizationEmail,
+    departmentId,
+    lecturerIds,
+  }: {
+    organizationEmail: string;
+    departmentId: string;
+    lecturerIds: string[];
+  }) {
+    return await this.lecturerRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the department when updating the lecturers
+        const department = await transactionalEntityManager.findOne(
+          Department,
+          {
+            where: {
+              id: departmentId,
+              faculty: {
+                college: {
+                  organization: {
+                    email: organizationEmail,
+                  },
+                },
+              },
+            },
+          },
+        );
+
+        // THROW an error if that department does not exist
+        if (!department) {
+          this.logger.error('Department not found!');
+          throw new BadRequestException('Department not found!');
+        }
+
+        // CREATE update department for lecturers
+        const updated_lecturers: Lecturer[] = await Promise.all(
+          lecturerIds.map(async (lecturerId) => {
+            const lecturer = await transactionalEntityManager.findOne(
+              Lecturer,
+              {
+                where: {
+                  id: lecturerId,
+                },
+                relations: ['departments'],
+              },
+            );
+
+            if (!lecturer) {
+              this.logger.error('Lecturer not found!');
+              throw new BadRequestException('Lecturer not found!');
+            }
+
+            const isInDepartment = Boolean(
+              lecturer.departments.find((dp) => dp.id === department.id),
+            );
+            if (isInDepartment) {
+              this.logger.error(
+                `This lecturer with id ${lecturer.id} is already in this department with id ${department.id}`,
+              );
+              throw new BadRequestException(
+                'This lecturer already belong to this department',
+              );
+            }
+
+            lecturer.departments.push(department);
+
+            return lecturer;
+          }),
+        );
+
+        // PERFORM bulk update for lecturers
+        this.logger.log(
+          `${updated_lecturers.length} lecturer(s) updated successfully`,
+        );
+        return transactionalEntityManager.save(updated_lecturers);
+      },
+    );
+  }
+
+  async createDepartmentClasses({
+    organizationEmail,
+    departmentId,
+    classes,
+  }: {
+    organizationEmail: string;
+    departmentId: string;
+    classes: CreateClassInput[];
+  }) {
+    return await this.classRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the department we are creating the classes for
+        const department = await transactionalEntityManager.findOne(
+          Department,
+          {
+            where: {
+              id: departmentId,
+              faculty: {
+                college: {
+                  organization: {
+                    email: organizationEmail,
+                  },
+                },
+              },
+            },
+          },
+        );
+
+        // THROW an error if that department does not exist
+        if (!department) {
+          this.logger.error('Department not found!');
+          throw new BadRequestException('Department not found!');
+        }
+
+        // CREATE new classes for faculty
+        const new_classes: Class[] = await Promise.all(
+          classes.map(async (dep_class) => {
+            const new_class = new Class();
+            new_class.name = dep_class.name;
+            new_class.department = department;
+
+            return new_class;
+          }),
+        );
+
+        // PERFORM bulk save for new_classes
+        this.logger.log(
+          `Created ${new_classes.length} department class(es) for department: ${department.name} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_classes);
+      },
+    );
   }
 
   private paginate<T>(

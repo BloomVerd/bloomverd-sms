@@ -1,4 +1,10 @@
-import { Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Department } from './department.entity';
 import { Semester } from './semester.entity';
 import { Student } from './student.entity';
@@ -7,6 +13,9 @@ import { Student } from './student.entity';
 export class Class {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ unique: true })
+  name: string;
 
   @ManyToOne(() => Department, (department) => department.classes)
   department: Department;

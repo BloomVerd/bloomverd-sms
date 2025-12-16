@@ -1,4 +1,4 @@
-import { Resolver, Query, Args, Mutation } from '@nestjs/graphql';
+import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import {
   CreateClassInput,
   CreateClassSemesterInput,
@@ -6,17 +6,17 @@ import {
   CreateCourseInput,
   CreateDepartmentInput,
   CreateFacultyInput,
-  CreateLecturereInput,
+  CreateLecturerInput,
   createStudentInput,
   PaginationInput,
 } from 'src/shared/inputs';
 import {
+  CollegeType,
   DepartmentType,
   FacultyType,
   LecturerType,
   RegisterResponseType,
 } from 'src/shared/types';
-import { CollegeType } from 'src/shared/types';
 import { OrgService } from './org.service';
 
 @Resolver()
@@ -112,19 +112,19 @@ export class OrgResolver {
     };
   }
 
-  @Mutation(() => LecturerType)
-  async createLecturer(
-    @Args('input') input: CreateLecturereInput,
-  ): Promise<LecturerType> {
-    console.log(input);
-    return {
-      email: input.email,
-      id: '1',
-      firstName: input.firstName,
-      lastName: input.lastName,
-      facultyId: input.facultyId,
-    };
-  }
+  // @Mutation(() => LecturerType)
+  // async createLecturer(
+  //   @Args('input') input: CreateLecturerInput,
+  // ): Promise<LecturerType> {
+  //   console.log(input);
+  //   return {
+  //     email: input.email,
+  //     id: '1',
+  //     firstName: input.firstName,
+  //     lastName: input.lastName,
+  //     // facultyId: input.facultyId,
+  //   };
+  // }
 
   @Mutation(() => RegisterResponseType)
   async assignLecturerToDepartment(
