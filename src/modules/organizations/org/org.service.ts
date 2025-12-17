@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import {
   Class,
   College,
+  Course,
+  CourseMaterial,
   Department,
   Faculty,
   Lecturer,
@@ -16,6 +18,8 @@ import {
   CreateClassInput,
   CreateClassSemesterInput,
   CreateCollegeInput,
+  CreateCourseInput,
+  CreateCourseMaterialInput,
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
@@ -40,6 +44,8 @@ export class OrgService {
     private classRepository: Repository<Class>,
     @InjectRepository(Semester)
     private semesterRepository: Repository<Semester>,
+    @InjectRepository(Course)
+    private courseRepository: Repository<Course>,
   ) {}
 
   async listOrganizationCollegePaginated({
@@ -516,6 +522,120 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_students);
+      },
+    );
+  }
+
+  async createSemesterCourses({
+    organizationalEmail,
+    semesterCourses,
+    semesterId,
+  }: {
+    organizationalEmail: string;
+    semesterCourses: CreateCourseInput[];
+    semesterId: string;
+  }) {
+    return await this.classRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // get the semester we are creating the course for
+        const semester = await transactionalEntityManager.findOne(Semester, {
+          where: {
+            id: semesterId,
+            class: {
+              department: {
+                faculty: {
+                  college: {
+                    organization: {
+                      email: organizationalEmail,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        //  Throw errror if semester does not exist
+        if (!semester) {
+          this.logger.error('Semester not found!');
+          throw new BadRequestException('semester not found!');
+        }
+
+        // create semester course
+        const new_semester_courses: Course[] = await Promise.all(
+          semesterCourses.map(async (semesterCourse) => {
+            const new_semester_course = new Course();
+            new_semester_course.name = semesterCourse.name;
+            new_semester_course.credits = semesterCourse.credits;
+            new_semester_course.semesters = [semester];
+
+            return new_semester_course;
+          }),
+        );
+
+        // perform new semester course save
+        this.logger.log(
+          `Created ${new_semester_courses.length} course(s) for semester: ${semester.id} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_semester_courses);
+      },
+    );
+  }
+
+  async uploadCourseMaterial({
+    organizationalEmail,
+    courseId,
+    materials,
+  }: {
+    organizationalEmail: string;
+    courseId: string;
+    materials: CreateCourseMaterialInput[];
+  }) {
+    return await this.courseRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the course we are uploading material for
+        const course = await transactionalEntityManager.findOne(Course, {
+          where: {
+            id: courseId,
+            semesters: {
+              class: {
+                department: {
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationalEmail,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // THROW an error if that course does not exist
+        if (!course) {
+          this.logger.error('Course not found!');
+          throw new BadRequestException('Course not found!');
+        }
+
+        const new_course_materials: CourseMaterial[] = await Promise.all(
+          materials.map(async (material) => {
+            const new_course_material = new CourseMaterial();
+            new_course_material.name = material.materialName;
+            new_course_material.url = material.materialUrl;
+            new_course_material.course = course;
+
+            return new_course_material;
+          }),
+        );
+        // Log the upload action
+        this.logger.log(
+          `Uploaded materials for course: ${course.id} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_course_materials);
       },
     );
   }

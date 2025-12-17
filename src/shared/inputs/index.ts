@@ -8,3 +8,4 @@ export * from './create-class-semester.input';
 export * from './create-student.input';
 export * from './create-course.input';
 export * from './pagination.inputs';
+export * from './create-course-material.input';
