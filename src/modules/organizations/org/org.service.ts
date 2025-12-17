@@ -5,6 +5,7 @@ import {
   Class,
   College,
   Course,
+  CourseMaterial,
   Department,
   Faculty,
   Lecturer,
@@ -18,6 +19,7 @@ import {
   CreateClassSemesterInput,
   CreateCollegeInput,
   CreateCourseInput,
+  CreateCourseMaterialInput,
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
@@ -536,7 +538,7 @@ export class OrgService {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
         // get the semester we are creating the course for
-        const sem_course = await transactionalEntityManager.findOne(Semester, {
+        const semester = await transactionalEntityManager.findOne(Semester, {
           where: {
             id: semesterId,
             class: {
@@ -554,16 +556,18 @@ export class OrgService {
         });
 
         //  Throw errror if semester does not exist
-        if (!sem_course) {
+        if (!semester) {
           this.logger.error('Semester not found!');
           throw new BadRequestException('semester not found!');
         }
 
         // create semester course
-        const new_semester_course: Course[] = await Promise.all(
+        const new_semester_courses: Course[] = await Promise.all(
           semesterCourses.map(async (semesterCourse) => {
             const new_semester_course = new Course();
-            new_semester_course.id = semesterCourse.courseId;
+            new_semester_course.name = semesterCourse.name;
+            new_semester_course.credits = semesterCourse.credits;
+            new_semester_course.semesters = [semester];
 
             return new_semester_course;
           }),
@@ -571,20 +575,22 @@ export class OrgService {
 
         // perform new semester course save
         this.logger.log(
-          `Created ${new_semester_course.length} course(s) for semester: ${sem_course.id} successfully`,
+          `Created ${new_semester_courses.length} course(s) for semester: ${semester.id} successfully`,
         );
 
-        return transactionalEntityManager.save(new_semester_course);
+        return transactionalEntityManager.save(new_semester_courses);
       },
     );
   }
 
   async uploadCourseMaterial({
+    organizationalEmail,
     courseId,
-    materialUrl,
+    materials,
   }: {
+    organizationalEmail: string;
     courseId: string;
-    materialUrl: string;
+    materials: CreateCourseMaterialInput[];
   }) {
     return await this.courseRepository.manager.transaction(
       async (transactionalEntityManager) => {
@@ -592,6 +598,19 @@ export class OrgService {
         const course = await transactionalEntityManager.findOne(Course, {
           where: {
             id: courseId,
+            semesters: {
+              class: {
+                department: {
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationalEmail,
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         });
 
@@ -601,18 +620,22 @@ export class OrgService {
           throw new BadRequestException('Course not found!');
         }
 
-        // Here you would normally handle the upload logic.
-        const courseMaterialUrl = materialUrl; // Placeholder for actual upload logic
+        const new_course_materials: CourseMaterial[] = await Promise.all(
+          materials.map(async (material) => {
+            const new_course_material = new CourseMaterial();
+            new_course_material.name = material.materialName;
+            new_course_material.url = material.materialUrl;
+            new_course_material.course = course;
 
+            return new_course_material;
+          }),
+        );
         // Log the upload action
         this.logger.log(
-          `Uploaded material for course: ${course.id} successfully`,
+          `Uploaded materials for course: ${course.id} successfully`,
         );
 
-        return {
-          course,
-          materialUrl: courseMaterialUrl,
-        };
+        return transactionalEntityManager.save(new_course_materials);
       },
     );
   }

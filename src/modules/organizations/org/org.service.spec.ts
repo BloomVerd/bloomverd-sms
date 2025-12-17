@@ -7,6 +7,7 @@ import {
   Class,
   College,
   Course,
+  CourseMaterial,
   Department,
   entities,
   Faculty,
@@ -33,6 +34,7 @@ describe('OrganizationService', () => {
   let semesterRepository: Repository<Semester>;
   let studentRepository: Repository<Student>;
   let courseRepository: Repository<Course>;
+  let courseMaterialRepository: Repository<CourseMaterial>;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -92,6 +94,9 @@ describe('OrganizationService', () => {
     );
     courseRepository = module.get<Repository<Course>>(
       getRepositoryToken(Course),
+    );
+    courseMaterialRepository = module.get<Repository<CourseMaterial>>(
+      getRepositoryToken(CourseMaterial),
     );
   });
 
@@ -384,7 +389,7 @@ describe('OrganizationService', () => {
       const semester_courses = await getSemesterCourses(semesters[0].id);
 
       expect(semester_courses.length).toEqual(courses.length);
-      expect(semester_courses[0].id).toBe(semesters[0].id);
+      expect(semester_courses[0].semesters[0].id).toBe(semesters[0].id);
     });
   });
 
@@ -424,15 +429,16 @@ describe('OrganizationService', () => {
         semesterCourses: [coursesData[0]],
       });
 
-      const courseMaterial = await orgService.uploadCourseMaterial({
+      const materials = await orgService.uploadCourseMaterial({
+        organizationalEmail: organization.email,
         courseId: courses[0].id,
-        materialUrl: 'http://example.com/material.pdf',
+        materials: materialsData,
       });
 
-      expect(courseMaterial).toBeDefined();
-      expect(courseMaterial.materialUrl).toEqual(
-        'http://example.com/material.pdf',
-      );
+      const course_materials = await getCourseMaterials(courses[0].id);
+
+      expect(course_materials.length).toEqual(materials.length);
+      expect(course_materials[0].course.id).toBe(courses[0].id);
     });
   });
 
@@ -533,11 +539,20 @@ describe('OrganizationService', () => {
 
   const coursesData = [
     {
-      courseId: 'course-uuid-1',
       name: 'Introduction to Biology',
-      lecturerId: 'lecturer-uuid-1',
       credits: 3,
-      classId: 'class-uuid-1',
+    },
+    { name: 'Chemical Compounds', credits: 4 },
+  ];
+
+  const materialsData = [
+    {
+      materialName: 'Biology Lecture Notes',
+      materialUrl: 'http://example.com/material.pdf',
+    },
+    {
+      materialName: 'Chemistry Lecture Notes',
+      materialUrl: 'http://example.com/chemistry-material.pdf',
     },
   ];
 
@@ -601,9 +616,16 @@ describe('OrganizationService', () => {
   };
 
   const getSemesterCourses = async (id: string) => {
-    return semesterRepository.find({
-      where: { courses: { id } },
-      relations: ['semester'],
+    return courseRepository.find({
+      where: { semesters: { id } },
+      relations: ['semesters'],
+    });
+  };
+
+  const getCourseMaterials = async (id: string) => {
+    return courseMaterialRepository.find({
+      where: { course: { id } },
+      relations: ['course'],
     });
   };
 });
