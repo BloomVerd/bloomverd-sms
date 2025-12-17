@@ -6,6 +6,7 @@ import { Connection, Repository } from 'typeorm';
 import {
   Class,
   College,
+  Course,
   Department,
   entities,
   Faculty,
@@ -31,6 +32,7 @@ describe('OrganizationService', () => {
   let classRepository: Repository<Class>;
   let semesterRepository: Repository<Semester>;
   let studentRepository: Repository<Student>;
+  let courseRepository: Repository<Course>;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -87,6 +89,9 @@ describe('OrganizationService', () => {
     );
     studentRepository = module.get<Repository<Student>>(
       getRepositoryToken(Student),
+    );
+    courseRepository = module.get<Repository<Course>>(
+      getRepositoryToken(Course),
     );
   });
 
@@ -340,6 +345,97 @@ describe('OrganizationService', () => {
     });
   });
 
+  describe('createSemesterCourses', () => {
+    it('Create bulk courses for a semester', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      const semesters = await orgService.createClassSemesters({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+      });
+
+      const courses = await orgService.createSemesterCourses({
+        organizationalEmail: organization.email,
+        semesterId: semesters[0].id,
+        semesterCourses: [coursesData[0]],
+      });
+
+      const semester_courses = await getSemesterCourses(semesters[0].id);
+
+      expect(semester_courses.length).toEqual(courses.length);
+      expect(semester_courses[0].id).toBe(semesters[0].id);
+    });
+  });
+
+  describe('uploadCourseMaterial', () => {
+    it('Upload course material for a course', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      const semesters = await orgService.createClassSemesters({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+      });
+
+      const courses = await orgService.createSemesterCourses({
+        organizationalEmail: organization.email,
+        semesterId: semesters[0].id,
+        semesterCourses: [coursesData[0]],
+      });
+
+      const courseMaterial = await orgService.uploadCourseMaterial({
+        courseId: courses[0].id,
+        materialUrl: 'http://example.com/material.pdf',
+      });
+
+      expect(courseMaterial).toBeDefined();
+      expect(courseMaterial.materialUrl).toEqual(
+        'http://example.com/material.pdf',
+      );
+    });
+  });
+
   // DATA
   const collegesData = [
     {
@@ -435,6 +531,16 @@ describe('OrganizationService', () => {
     },
   ];
 
+  const coursesData = [
+    {
+      courseId: 'course-uuid-1',
+      name: 'Introduction to Biology',
+      lecturerId: 'lecturer-uuid-1',
+      credits: 3,
+      classId: 'class-uuid-1',
+    },
+  ];
+
   // HELPER FXN
   const setupData = async () => {
     const organization = new Organization();
@@ -491,6 +597,13 @@ describe('OrganizationService', () => {
     return studentRepository.find({
       where: { class: { id } },
       relations: ['class'],
+    });
+  };
+
+  const getSemesterCourses = async (id: string) => {
+    return semesterRepository.find({
+      where: { courses: { id } },
+      relations: ['semester'],
     });
   };
 });

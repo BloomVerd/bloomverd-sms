@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import {
   Class,
   College,
+  Course,
   Department,
   Faculty,
   Lecturer,
@@ -16,6 +17,7 @@ import {
   CreateClassInput,
   CreateClassSemesterInput,
   CreateCollegeInput,
+  CreateCourseInput,
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
@@ -40,6 +42,8 @@ export class OrgService {
     private classRepository: Repository<Class>,
     @InjectRepository(Semester)
     private semesterRepository: Repository<Semester>,
+    @InjectRepository(Course)
+    private courseRepository: Repository<Course>,
   ) {}
 
   async listOrganizationCollegePaginated({
@@ -516,6 +520,99 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_students);
+      },
+    );
+  }
+
+  async createSemesterCourses({
+    organizationalEmail,
+    semesterCourses,
+    semesterId,
+  }: {
+    organizationalEmail: string;
+    semesterCourses: CreateCourseInput[];
+    semesterId: string;
+  }) {
+    return await this.classRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // get the semester we are creating the course for
+        const sem_course = await transactionalEntityManager.findOne(Semester, {
+          where: {
+            id: semesterId,
+            class: {
+              department: {
+                faculty: {
+                  college: {
+                    organization: {
+                      email: organizationalEmail,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        //  Throw errror if semester does not exist
+        if (!sem_course) {
+          this.logger.error('Semester not found!');
+          throw new BadRequestException('semester not found!');
+        }
+
+        // create semester course
+        const new_semester_course: Course[] = await Promise.all(
+          semesterCourses.map(async (semesterCourse) => {
+            const new_semester_course = new Course();
+            new_semester_course.id = semesterCourse.courseId;
+
+            return new_semester_course;
+          }),
+        );
+
+        // perform new semester course save
+        this.logger.log(
+          `Created ${new_semester_course.length} course(s) for semester: ${sem_course.id} successfully`,
+        );
+
+        return transactionalEntityManager.save(new_semester_course);
+      },
+    );
+  }
+
+  async uploadCourseMaterial({
+    courseId,
+    materialUrl,
+  }: {
+    courseId: string;
+    materialUrl: string;
+  }) {
+    return await this.courseRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // GET the course we are uploading material for
+        const course = await transactionalEntityManager.findOne(Course, {
+          where: {
+            id: courseId,
+          },
+        });
+
+        // THROW an error if that course does not exist
+        if (!course) {
+          this.logger.error('Course not found!');
+          throw new BadRequestException('Course not found!');
+        }
+
+        // Here you would normally handle the upload logic.
+        const courseMaterialUrl = materialUrl; // Placeholder for actual upload logic
+
+        // Log the upload action
+        this.logger.log(
+          `Uploaded material for course: ${course.id} successfully`,
+        );
+
+        return {
+          course,
+          materialUrl: courseMaterialUrl,
+        };
       },
     );
   }

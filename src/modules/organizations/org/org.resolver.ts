@@ -220,4 +220,25 @@ export class OrgResolver {
       message: 'Student enrolled in course successfully',
     };
   }
+
+  // @Mutation(() => RegisterResponseType)
+  // async createSemesterCourse(
+  //   @Args('input') input: CreateCourseInput,
+  // ): Promise<RegisterResponseType> {
+  //   console.log(input);
+  //   return {
+  //     message: 'Semester course created successfully',
+  //   };
+  // }
+
+  @Mutation(() => RegisterResponseType)
+  async uploadCourseMaterial(
+    @Args('courseId') courseId: string,
+    @Args('materialUrl') materialUrl: string,
+  ): Promise<RegisterResponseType> {
+    console.log({ courseId, materialUrl });
+    return {
+      message: 'Course material uploaded successfully',
+    };
+  }
 }
