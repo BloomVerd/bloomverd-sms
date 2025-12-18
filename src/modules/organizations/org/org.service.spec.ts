@@ -777,12 +777,10 @@ describe('OrganizationService', () => {
     {
       name: 'Test College',
       email: 'college@gmail.com',
-      password: 'password',
     },
     {
       name: 'Test Colleges',
       email: 'college1@gmail.com',
-      password: 'password',
     },
   ];
 
@@ -790,12 +788,10 @@ describe('OrganizationService', () => {
     {
       name: 'Test Faculty',
       email: 'faculty@gmail.com',
-      password: 'password',
     },
     {
       name: 'Test Facultys',
       email: 'faculty1@gmail.com',
-      password: 'password',
     },
   ];
 
@@ -803,12 +799,10 @@ describe('OrganizationService', () => {
     {
       name: 'Test Department',
       email: 'department@gmail.com',
-      password: 'password',
     },
     {
       name: 'Test Departments',
       email: 'department1@gmail.com',
-      password: 'password',
     },
   ];
 
@@ -821,7 +815,6 @@ describe('OrganizationService', () => {
       phoneNumber: '0550815604',
       address: 'address',
       dateOfBirth: new Date(),
-      password: 'password',
     },
     {
       email: 'lecture2@gmail.com',
@@ -831,7 +824,6 @@ describe('OrganizationService', () => {
       phoneNumber: '0550815605',
       address: 'address',
       dateOfBirth: new Date(),
-      password: 'password',
     },
   ];
 
@@ -853,7 +845,6 @@ describe('OrganizationService', () => {
       phoneNumber: '0550815604',
       address: 'address',
       dateOfBirth: new Date(),
-      password: 'password',
     },
     {
       email: 'student2@gmail.com',
@@ -863,7 +854,6 @@ describe('OrganizationService', () => {
       phoneNumber: '0550815605',
       address: 'address',
       dateOfBirth: new Date(),
-      password: 'password',
     },
   ];
 

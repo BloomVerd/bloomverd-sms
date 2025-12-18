@@ -23,7 +23,7 @@ export class Department {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   password: string;
 
   @ManyToOne(() => Faculty, (faculty) => faculty.departments)

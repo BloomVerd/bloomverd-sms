@@ -13,16 +13,21 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
-import { HashHelper } from '../../../shared/helpers';
 import {
   CreateClassInput,
+  CreateClassWithRelationshipInput,
   CreateCollegeInput,
   CreateCourseInput,
   CreateCourseMaterialInput,
+  CreateCourseWithRelationshipInput,
   CreateDepartmentInput,
+  CreateDepartmentWithRelationshipInput,
   CreateFacultyInput,
+  CreateFacultyWithRelationshipInput,
   CreateLecturerInput,
+  CreateLecturerWithRelationshipInput,
   CreateStudentInput,
+  CreateStudentWithRelationshipInput,
   PaginationInput,
 } from '../../../shared/inputs';
 import { ValidationResponseType } from '../../../shared/types';
@@ -49,41 +54,6 @@ export class OrgService {
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
   ) {}
-
-  async listOrganizationCollegePaginated({
-    organizationId,
-    searchTerm,
-    pagination,
-  }: {
-    organizationId?: string;
-    searchTerm: string;
-    pagination?: PaginationInput;
-  }) {
-    const college = await this.listOrganizationColleges({
-      organizationId,
-      searchTerm,
-    });
-
-    return this.paginate<College>(college, pagination, (college) =>
-      college.id.toString(),
-    );
-  }
-
-  async listOrganizationColleges({
-    organizationId,
-    searchTerm,
-  }: {
-    organizationId?: string;
-    searchTerm: string;
-  }) {
-    return this.collegeRepository.find({
-      where: {
-        organization: organizationId ? { id: organizationId } : undefined,
-        // name: searchTerm ? ILike(`%${searchTerm}%`) : undefined,
-      },
-      relations: ['organization', 'faculties'],
-    });
-  }
 
   async createColleges({
     organizationEmail,
@@ -116,7 +86,6 @@ export class OrgService {
             const new_college = new College();
             new_college.name = `${organization.id}-${college.name}`;
             new_college.email = college.email;
-            new_college.password = await HashHelper.encrypt(college.password);
             new_college.organization = organization;
 
             return new_college;
@@ -229,7 +198,6 @@ export class OrgService {
             const new_faculty = new Faculty();
             new_faculty.email = faculty.email;
             new_faculty.name = `${college.organization.id}-${faculty.name}`;
-            new_faculty.password = await HashHelper.encrypt(faculty.password);
             new_faculty.college = college;
 
             return new_faculty;
@@ -344,9 +312,6 @@ export class OrgService {
             const new_department = new Department();
             new_department.email = department.email;
             new_department.name = `${faculty.college.organization.id}-${department.name}`;
-            new_department.password = await HashHelper.encrypt(
-              department.password,
-            );
             new_department.faculty = faculty;
 
             return new_department;
@@ -471,7 +436,6 @@ export class OrgService {
             new_lecturer.address = lecturer.address;
             new_lecturer.date_of_birth = lecturer.dateOfBirth;
             new_lecturer.organization = organization;
-            new_lecturer.password = await HashHelper.encrypt(lecturer.password);
 
             return new_lecturer;
           }),
@@ -1085,6 +1049,97 @@ export class OrgService {
         return transactionalEntityManager.save(new_course_materials);
       },
     );
+  }
+
+  async setupAction({
+    organizationEmail,
+    colleges,
+    faculties,
+    departments,
+    lecturers,
+    classes,
+    students,
+    courses,
+  }: {
+    organizationEmail: string;
+    colleges: CreateCollegeInput[];
+    faculties: CreateFacultyWithRelationshipInput[];
+    departments: CreateDepartmentWithRelationshipInput[];
+    lecturers: CreateLecturerWithRelationshipInput[];
+    classes: CreateClassWithRelationshipInput[];
+    students: CreateStudentWithRelationshipInput[];
+    courses: CreateCourseWithRelationshipInput[];
+  }) {
+    // Validate all fields
+    if (colleges.length) {
+      const errors = await this.validateCollegeData({
+        organizationEmail,
+        colleges,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (faculties.length) {
+      const errors = await this.validateFacultyData({
+        organizationEmail,
+        faculties,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (departments.length) {
+      const errors = await this.validateDepartmentData({
+        organizationEmail,
+        departments,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (lecturers.length) {
+      const errors = await this.validateLecturerData({
+        organizationEmail,
+        lecturers,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (classes.length) {
+      const errors = await this.validateClassData({
+        organizationEmail,
+        classes,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (students.length) {
+      const errors = await this.validateStudentData({
+        organizationEmail,
+        students,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    if (courses.length) {
+      const errors = await this.validateCourseData({
+        organizationEmail,
+        courses,
+      });
+
+      if (errors.length) throw new BadRequestException(errors);
+    }
+
+    // Spin up a background job to process the data
+
+    return {
+      message:
+        'An in-app notification or email will be sent to you after everything is done setting up',
+    };
   }
 
   private paginate<T>(

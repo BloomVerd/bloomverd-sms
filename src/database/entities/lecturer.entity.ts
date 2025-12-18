@@ -45,7 +45,7 @@ export class Lecturer {
   @Column()
   date_of_birth: Date;
 
-  @Column()
+  @Column({ nullable: true })
   password: string;
 
   @ManyToMany(() => Department, (department) => department.lecturers)

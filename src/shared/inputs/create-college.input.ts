@@ -7,7 +7,4 @@ export class CreateCollegeInput {
 
   @Field()
   name: string;
-
-  @Field()
-  password: string;
 }

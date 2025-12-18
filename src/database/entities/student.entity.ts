@@ -31,6 +31,9 @@ export class Student {
   @Column()
   date_of_birth: Date;
 
+  @Column({ nullable: true })
+  password: string;
+
   @ManyToOne(() => Class, (cls) => cls.students)
   class: Class;
 }

@@ -7,7 +7,4 @@ export class CreateFacultyInput {
 
   @Field()
   name: string;
-
-  @Field()
-  password: string;
 }

@@ -7,7 +7,4 @@ export class CreateDepartmentInput {
 
   @Field()
   name: string;
-
-  @Field()
-  password: string;
 }

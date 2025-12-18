@@ -1,16 +1,25 @@
 import { UseGuards } from '@nestjs/common';
-import { Args, Context, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
   CreateClassInput,
+  CreateClassWithRelationshipInput,
   CreateCollegeInput,
   CreateCourseInput,
+  CreateCourseWithRelationshipInput,
   CreateDepartmentInput,
+  CreateDepartmentWithRelationshipInput,
   CreateFacultyInput,
+  CreateFacultyWithRelationshipInput,
   CreateLecturerInput,
+  CreateLecturerWithRelationshipInput,
   CreateStudentInput,
+  CreateStudentWithRelationshipInput,
 } from '../../../shared/inputs';
-import { ValidationResponseType } from '../../../shared/types';
+import {
+  RegisterResponseType,
+  ValidationResponseType,
+} from '../../../shared/types';
 import { OrgService } from './org.service';
 
 @Resolver()
@@ -133,6 +142,57 @@ export class OrgResolver {
 
     return this.orgService.validateCourseData({
       organizationEmail: email,
+      courses,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => RegisterResponseType)
+  setupAction(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('colleges', { type: () => [CreateCollegeInput!], nullable: true })
+    colleges: CreateCollegeInput[],
+    @Args('faculties', {
+      type: () => [CreateFacultyWithRelationshipInput!],
+      nullable: true,
+    })
+    faculties: CreateFacultyWithRelationshipInput[],
+    @Args('departments', {
+      type: () => [CreateDepartmentWithRelationshipInput!],
+      nullable: true,
+    })
+    departments: CreateDepartmentWithRelationshipInput[],
+    @Args('lecturers', {
+      type: () => [CreateLecturerWithRelationshipInput!],
+      nullable: true,
+    })
+    lecturers: CreateLecturerWithRelationshipInput[],
+    @Args('classes', {
+      type: () => [CreateClassWithRelationshipInput!],
+      nullable: true,
+    })
+    classes: CreateClassWithRelationshipInput[],
+    @Args('students', {
+      type: () => [CreateStudentWithRelationshipInput!],
+      nullable: true,
+    })
+    students: CreateStudentWithRelationshipInput[],
+    @Args('courses', {
+      type: () => [CreateCourseWithRelationshipInput!],
+      nullable: true,
+    })
+    courses: CreateCourseWithRelationshipInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.setupAction({
+      organizationEmail: email,
+      colleges,
+      faculties,
+      departments,
+      lecturers,
+      classes,
+      students,
       courses,
     });
   }

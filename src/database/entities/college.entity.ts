@@ -21,7 +21,7 @@ export class College {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   password: string;
 
   @ManyToOne(() => Organization, (organization) => organization.colleges)

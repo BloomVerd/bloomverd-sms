@@ -13,9 +13,6 @@ export class CreateLecturerInput {
   lastName: string;
 
   @Field()
-  password: string;
-
-  @Field()
   gender: Gender;
 
   @Field()
