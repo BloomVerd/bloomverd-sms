@@ -76,7 +76,7 @@ export class OrgResolver {
 
   @UseGuards(GqlJwtAuthGuard)
   @Query(() => [ValidationResponseType])
-  validateLectureData(
+  validateLecturerData(
     @Context() context: { req: { user: { email: string } } },
     @Args('lecturers', {
       type: () => [CreateLecturerInput!]!,
