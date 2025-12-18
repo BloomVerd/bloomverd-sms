@@ -1,25 +1,34 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { OrganizationTypeClass } from 'src/database/types';
-import { RegisterInput } from 'src/shared/inputs';
-import { RegisterResponseType } from 'src/shared/types';
+import {
+  OrganizationLoginResponse,
+  RegisterResponseType,
+} from 'src/shared/types';
+import { AuthService } from './auth.service';
 
 @Resolver()
 export class AuthResolver {
-  @Query(() => OrganizationTypeClass)
-  async loginOrganization() {
-    return {
-      id: '1',
-      email: 'organization@example.com',
-    };
+  constructor(private readonly authService: AuthService) {}
+
+  // Queries
+  @Query(() => OrganizationLoginResponse)
+  async loginOrganization(
+    @Args('email') email: string,
+    @Args('password') password: string,
+  ) {
+    return this.authService.loginOrganization({ email, password });
   }
 
+  // Mutations
   @Mutation(() => RegisterResponseType)
   async registerOrganization(
-    @Args('input') input: RegisterInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Created successfully',
-    };
+    @Args('name') name: string,
+    @Args('email') email: string,
+    @Args('password') password: string,
+  ) {
+    return this.authService.registerOrganization({
+      name,
+      email,
+      password,
+    });
   }
 }

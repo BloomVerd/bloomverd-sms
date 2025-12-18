@@ -890,6 +890,7 @@ describe('OrganizationService', () => {
   // HELPER FXN
   const setupData = async () => {
     const organization = new Organization();
+    organization.name = 'Test organization';
     organization.email = 'test@gmail.com';
     organization.password = await HashHelper.encrypt('password');
     await orgRepository.save(organization);
