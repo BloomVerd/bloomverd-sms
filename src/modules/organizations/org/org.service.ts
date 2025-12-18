@@ -128,7 +128,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          colleges.map(async (college) => {
+          colleges.map(async (college, index) => {
             const existing_college_by_name =
               await transactionalEntityManager.findOne(College, {
                 where: {
@@ -141,6 +141,7 @@ export class OrgService {
                 field: 'name',
                 input: college.name,
                 message: 'College with this name already exist',
+                index,
               });
             }
 
@@ -159,6 +160,7 @@ export class OrgService {
                 field: 'email',
                 input: college.email,
                 message: 'College with this email already exist',
+                index,
               });
             }
           }),
@@ -240,7 +242,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          faculties.map(async (faculty) => {
+          faculties.map(async (faculty, index) => {
             const existing_faculty_by_name =
               await transactionalEntityManager.findOne(Faculty, {
                 where: {
@@ -253,6 +255,7 @@ export class OrgService {
                 field: 'name',
                 input: `${organization.id}-${faculty.name}`,
                 message: 'Faculty with this name already exist',
+                index,
               });
             }
 
@@ -273,6 +276,7 @@ export class OrgService {
                 field: 'email',
                 input: faculty.email,
                 message: 'Faculty with this email already exist',
+                index,
               });
             }
           }),
@@ -354,7 +358,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          departments.map(async (department) => {
+          departments.map(async (department, index) => {
             const existing_department_by_name =
               await transactionalEntityManager.findOne(Department, {
                 where: {
@@ -367,6 +371,7 @@ export class OrgService {
                 field: 'name',
                 input: department.name,
                 message: 'Department with this name already exist',
+                index,
               });
             }
 
@@ -389,6 +394,7 @@ export class OrgService {
                 field: 'email',
                 input: department.email,
                 message: 'Department with this email already exist',
+                index,
               });
             }
           }),
@@ -556,7 +562,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          lecturers.map(async (lecturer) => {
+          lecturers.map(async (lecturer, index) => {
             const existing_lecturer_by_email =
               await transactionalEntityManager.findOne(Lecturer, {
                 where: {
@@ -569,6 +575,7 @@ export class OrgService {
                 field: 'email',
                 input: lecturer.email,
                 message: 'Course with this email already exist',
+                index,
               });
             }
 
@@ -584,6 +591,7 @@ export class OrgService {
                 field: 'phone_number',
                 input: lecturer.phoneNumber,
                 message: 'Course with this phone number already exist',
+                index,
               });
             }
           }),
@@ -677,7 +685,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          classes.map(async (depClass) => {
+          classes.map(async (depClass, index) => {
             const existing_class_by_name =
               await transactionalEntityManager.findOne(Class, {
                 where: {
@@ -690,6 +698,7 @@ export class OrgService {
                 field: 'name',
                 input: depClass.name,
                 message: 'Class with this name already exist',
+                index,
               });
             }
           }),
@@ -847,7 +856,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          students.map(async (student) => {
+          students.map(async (student, index) => {
             const existing_student_by_email =
               await transactionalEntityManager.findOne(Student, {
                 where: {
@@ -860,6 +869,7 @@ export class OrgService {
                 field: 'email',
                 input: student.email,
                 message: 'Student with this email already exist',
+                index,
               });
             }
 
@@ -875,6 +885,7 @@ export class OrgService {
                 field: 'phone_number',
                 input: student.phoneNumber,
                 message: 'Student with this phone number already exist',
+                index,
               });
             }
           }),
@@ -971,7 +982,7 @@ export class OrgService {
         const errors: ValidationResponseType[] = [];
 
         await Promise.all(
-          courses.map(async (course) => {
+          courses.map(async (course, index) => {
             const existing_course_by_code =
               await transactionalEntityManager.findOne(Course, {
                 where: {
@@ -984,6 +995,7 @@ export class OrgService {
                 field: 'code',
                 input: course.code,
                 message: 'Course with this code already exist',
+                index,
               });
             }
           }),
