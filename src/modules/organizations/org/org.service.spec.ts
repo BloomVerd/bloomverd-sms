@@ -442,6 +442,336 @@ describe('OrganizationService', () => {
     });
   });
 
+  describe('validateCollegeData', () => {
+    it('returns an empty validation-response array when college data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateCollegeData({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if college already exist by name and email', async () => {
+      const { organization } = await setupData();
+
+      await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+      });
+
+      const validation_response = await orgService.validateCollegeData({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+      });
+
+      expect(validation_response.length).toEqual(4);
+    });
+  });
+
+  describe('validateFacultyData', () => {
+    it('returns an empty validation-response array when faculty data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateFacultyData({
+        organizationEmail: organization.email,
+        faculties: facultyData.map((faculty) => ({
+          ...faculty,
+          collegeEmail: 'college@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if faculty already exist by name and email', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: facultyData,
+      });
+
+      const validation_response = await orgService.validateFacultyData({
+        organizationEmail: organization.email,
+        faculties: facultyData,
+      });
+
+      expect(validation_response.length).toEqual(4);
+    });
+  });
+
+  describe('validateDepartmentData', () => {
+    it('returns an empty validation-response array when department data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateDepartmentData({
+        organizationEmail: organization.email,
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: 'faculty@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if department already exist by name and email', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: departmentData,
+      });
+
+      const validation_response = await orgService.validateDepartmentData({
+        organizationEmail: organization.email,
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: 'faculty@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(4);
+    });
+  });
+
+  describe('validateClassData', () => {
+    it('returns an empty validation-response array when class data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateClassData({
+        organizationEmail: organization.email,
+        classes: classData.map((cls) => ({
+          ...cls,
+          departmentEmail: 'department@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if class already exist by name', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: classData,
+      });
+
+      const validation_response = await orgService.validateClassData({
+        organizationEmail: organization.email,
+        classes: classData.map((cls) => ({
+          ...cls,
+          departmentEmail: 'department@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(2);
+    });
+  });
+
+  describe('validateCourseData', () => {
+    it('returns an empty validation-response array when course data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateCourseData({
+        organizationEmail: organization.email,
+        courses: coursesData.map((cls) => ({
+          ...cls,
+          semesterNumber: 1,
+        })),
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if course already exist by code', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      const semesters = await orgService.createClassSemesters({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+      });
+
+      await orgService.createSemesterCourses({
+        organizationalEmail: organization.email,
+        semesterId: semesters[0].id,
+        semesterCourses: coursesData,
+      });
+
+      const validation_response = await orgService.validateCourseData({
+        organizationEmail: organization.email,
+        courses: coursesData.map((course) => ({
+          ...course,
+          semesterNumber: 1,
+        })),
+      });
+
+      expect(validation_response.length).toEqual(2);
+    });
+  });
+
+  describe('validateLecturerData', () => {
+    it('returns an empty validation-response array when lecturer data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateLecturerData({
+        organizationEmail: organization.email,
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: 'department@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if lecturer already exist by email and phone_number', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      await orgService.createLecturers({
+        organizationEmail: organization.email,
+        lecturers: lecturerData,
+      });
+
+      const validation_response = await orgService.validateLecturerData({
+        organizationEmail: organization.email,
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: 'department@gmail.com',
+        })),
+      });
+
+      expect(validation_response.length).toEqual(4);
+    });
+  });
+
+  describe('validateStudentData', () => {
+    it('returns an empty validation-response array when student data has no issues', async () => {
+      const { organization } = await setupData();
+
+      const validation_response = await orgService.validateStudentData({
+        organizationEmail: organization.email,
+        students: studentData,
+      });
+
+      expect(validation_response.length).toEqual(0);
+    });
+
+    it('returns an array of validation-response error if student already exist by email and phone_number', async () => {
+      const { organization } = await setupData();
+
+      const colleges = await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      const faculties = await orgService.createFaculties({
+        collegeEmail: colleges[0].email,
+        faculties: [facultyData[0]],
+      });
+
+      const departments = await orgService.createDepartments({
+        facultyEmail: faculties[0].email,
+        departments: [departmentData[0]],
+      });
+
+      await orgService.createLecturers({
+        organizationEmail: organization.email,
+        lecturers: lecturerData,
+      });
+
+      const classes = await orgService.createDepartmentClasses({
+        organizationEmail: organization.email,
+        departmentId: departments[0].id,
+        classes: [classData[0]],
+      });
+
+      await orgService.createClassStudents({
+        organizationEmail: organization.email,
+        classId: classes[0].id,
+        students: studentData,
+      });
+
+      const validation_response = await orgService.validateStudentData({
+        organizationEmail: organization.email,
+        students: studentData,
+      });
+
+      expect(validation_response.length).toEqual(4);
+    });
+  });
+
   // DATA
   const collegesData = [
     {
@@ -540,9 +870,10 @@ describe('OrganizationService', () => {
   const coursesData = [
     {
       name: 'Introduction to Biology',
+      code: 'EL291',
       credits: 3,
     },
-    { name: 'Chemical Compounds', credits: 4 },
+    { name: 'Chemical Compounds', code: 'CW291', credits: 4 },
   ];
 
   const materialsData = [

@@ -16,7 +16,6 @@ import {
 import { HashHelper } from '../../../shared/helpers';
 import {
   CreateClassInput,
-  CreateClassSemesterInput,
   CreateCollegeInput,
   CreateCourseInput,
   CreateCourseMaterialInput,
@@ -26,6 +25,7 @@ import {
   CreateStudentInput,
   PaginationInput,
 } from '../../../shared/inputs';
+import { ValidationResponseType } from '../../../shared/types';
 
 @Injectable()
 export class OrgService {
@@ -46,6 +46,8 @@ export class OrgService {
     private semesterRepository: Repository<Semester>,
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
+    @InjectRepository(Student)
+    private studentRepository: Repository<Student>,
   ) {}
 
   async listOrganizationCollegePaginated({
@@ -112,8 +114,8 @@ export class OrgService {
         const new_colleges: College[] = await Promise.all(
           colleges.map(async (college) => {
             const new_college = new College();
+            new_college.name = `${organization.id}-${college.name}`;
             new_college.email = college.email;
-            new_college.name = college.name;
             new_college.password = await HashHelper.encrypt(college.password);
             new_college.organization = organization;
 
@@ -126,6 +128,74 @@ export class OrgService {
           `Created ${new_colleges.length} college(s) successfully`,
         );
         return transactionalEntityManager.save(new_colleges);
+      },
+    );
+  }
+
+  async validateCollegeData({
+    organizationEmail,
+    colleges,
+  }: {
+    organizationEmail: string;
+    colleges: CreateCollegeInput[];
+  }) {
+    return await this.collegeRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          colleges.map(async (college) => {
+            const existing_college_by_name =
+              await transactionalEntityManager.findOne(College, {
+                where: {
+                  name: `${organization.id}-${college.name}`,
+                },
+              });
+
+            if (existing_college_by_name) {
+              errors.push({
+                field: 'name',
+                input: college.name,
+                message: 'College with this name already exist',
+              });
+            }
+
+            const existing_college_by_email =
+              await transactionalEntityManager.findOne(College, {
+                where: {
+                  email: college.email,
+                  organization: {
+                    email: organizationEmail,
+                  },
+                },
+              });
+
+            if (existing_college_by_email) {
+              errors.push({
+                field: 'email',
+                input: college.email,
+                message: 'College with this email already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
       },
     );
   }
@@ -144,6 +214,7 @@ export class OrgService {
           where: {
             email: collegeEmail,
           },
+          relations: ['organization'],
         });
 
         // THROW an error if that college does not exist
@@ -157,7 +228,7 @@ export class OrgService {
           faculties.map(async (faculty) => {
             const new_faculty = new Faculty();
             new_faculty.email = faculty.email;
-            new_faculty.name = faculty.name;
+            new_faculty.name = `${college.organization.id}-${faculty.name}`;
             new_faculty.password = await HashHelper.encrypt(faculty.password);
             new_faculty.college = college;
 
@@ -170,6 +241,76 @@ export class OrgService {
           `Created ${new_faculties.length} faculties(s) for college: ${college.name} successfully`,
         );
         return transactionalEntityManager.save(new_faculties);
+      },
+    );
+  }
+
+  async validateFacultyData({
+    organizationEmail,
+    faculties,
+  }: {
+    organizationEmail: string;
+    faculties: CreateFacultyInput[];
+  }) {
+    return await this.facultyRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          faculties.map(async (faculty) => {
+            const existing_faculty_by_name =
+              await transactionalEntityManager.findOne(Faculty, {
+                where: {
+                  name: `${organization.id}-${faculty.name}`,
+                },
+              });
+
+            if (existing_faculty_by_name) {
+              errors.push({
+                field: 'name',
+                input: `${organization.id}-${faculty.name}`,
+                message: 'Faculty with this name already exist',
+              });
+            }
+
+            const existing_faculty_by_email =
+              await transactionalEntityManager.findOne(Faculty, {
+                where: {
+                  email: faculty.email,
+                  college: {
+                    organization: {
+                      email: organizationEmail,
+                    },
+                  },
+                },
+              });
+
+            if (existing_faculty_by_email) {
+              errors.push({
+                field: 'email',
+                input: faculty.email,
+                message: 'Faculty with this email already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
       },
     );
   }
@@ -188,6 +329,7 @@ export class OrgService {
           where: {
             email: facultyEmail,
           },
+          relations: ['college.organization'],
         });
 
         // THROW an error if that faculty does not exist
@@ -201,7 +343,7 @@ export class OrgService {
           departments.map(async (department) => {
             const new_department = new Department();
             new_department.email = department.email;
-            new_department.name = department.name;
+            new_department.name = `${faculty.college.organization.id}-${department.name}`;
             new_department.password = await HashHelper.encrypt(
               department.password,
             );
@@ -216,6 +358,78 @@ export class OrgService {
           `Created ${new_departments.length} department(s) for faculty: ${faculty.name} successfully`,
         );
         return transactionalEntityManager.save(new_departments);
+      },
+    );
+  }
+
+  async validateDepartmentData({
+    organizationEmail,
+    departments,
+  }: {
+    organizationEmail: string;
+    departments: CreateDepartmentInput[];
+  }) {
+    return await this.departmentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          departments.map(async (department) => {
+            const existing_department_by_name =
+              await transactionalEntityManager.findOne(Department, {
+                where: {
+                  name: `${organization.id}-${department.name}`,
+                },
+              });
+
+            if (existing_department_by_name) {
+              errors.push({
+                field: 'name',
+                input: department.name,
+                message: 'Department with this name already exist',
+              });
+            }
+
+            const existing_department_by_email =
+              await transactionalEntityManager.findOne(Department, {
+                where: {
+                  email: department.email,
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationEmail,
+                      },
+                    },
+                  },
+                },
+              });
+
+            if (existing_department_by_email) {
+              errors.push({
+                field: 'email',
+                input: department.email,
+                message: 'Department with this email already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
       },
     );
   }
@@ -351,6 +565,71 @@ export class OrgService {
     );
   }
 
+  async validateLecturerData({
+    organizationEmail,
+    lecturers,
+  }: {
+    organizationEmail: string;
+    lecturers: CreateLecturerInput[];
+  }) {
+    return await this.lecturerRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          lecturers.map(async (lecturer) => {
+            const existing_lecturer_by_email =
+              await transactionalEntityManager.findOne(Lecturer, {
+                where: {
+                  email: lecturer.email,
+                },
+              });
+
+            if (existing_lecturer_by_email) {
+              errors.push({
+                field: 'email',
+                input: lecturer.email,
+                message: 'Course with this email already exist',
+              });
+            }
+
+            const existing_lecturer_by_phone_number =
+              await transactionalEntityManager.findOne(Lecturer, {
+                where: {
+                  phone_number: lecturer.phoneNumber,
+                },
+              });
+
+            if (existing_lecturer_by_phone_number) {
+              errors.push({
+                field: 'phone_number',
+                input: lecturer.phoneNumber,
+                message: 'Course with this phone number already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
+      },
+    );
+  }
+
   async createDepartmentClasses({
     organizationEmail,
     departmentId,
@@ -376,6 +655,7 @@ export class OrgService {
                 },
               },
             },
+            relations: ['faculty.college.organization'],
           },
         );
 
@@ -389,7 +669,7 @@ export class OrgService {
         const new_classes: Class[] = await Promise.all(
           classes.map(async (dep_class) => {
             const new_class = new Class();
-            new_class.name = dep_class.name;
+            new_class.name = `${department.faculty.college.organization.id}-${dep_class.name}`;
             new_class.department = department;
 
             return new_class;
@@ -402,6 +682,56 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_classes);
+      },
+    );
+  }
+
+  async validateClassData({
+    organizationEmail,
+    classes,
+  }: {
+    organizationEmail: string;
+    classes: CreateClassInput[];
+  }) {
+    return await this.classRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          classes.map(async (depClass) => {
+            const existing_class_by_name =
+              await transactionalEntityManager.findOne(Class, {
+                where: {
+                  name: `${organization.id}-${depClass.name}`,
+                },
+              });
+
+            if (existing_class_by_name) {
+              errors.push({
+                field: 'name',
+                input: depClass.name,
+                message: 'Class with this name already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
       },
     );
   }
@@ -526,6 +856,71 @@ export class OrgService {
     );
   }
 
+  async validateStudentData({
+    organizationEmail,
+    students,
+  }: {
+    organizationEmail: string;
+    students: CreateStudentInput[];
+  }) {
+    return await this.studentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          students.map(async (student) => {
+            const existing_student_by_email =
+              await transactionalEntityManager.findOne(Student, {
+                where: {
+                  email: student.email,
+                },
+              });
+
+            if (existing_student_by_email) {
+              errors.push({
+                field: 'email',
+                input: student.email,
+                message: 'Student with this email already exist',
+              });
+            }
+
+            const existing_student_by_phone_number =
+              await transactionalEntityManager.findOne(Student, {
+                where: {
+                  phone_number: student.phoneNumber,
+                },
+              });
+
+            if (existing_student_by_phone_number) {
+              errors.push({
+                field: 'phone_number',
+                input: student.phoneNumber,
+                message: 'Student with this phone number already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
+      },
+    );
+  }
+
   async createSemesterCourses({
     organizationalEmail,
     semesterCourses,
@@ -553,6 +948,7 @@ export class OrgService {
               },
             },
           },
+          relations: ['class.department.faculty.college.organization'],
         });
 
         //  Throw errror if semester does not exist
@@ -565,6 +961,7 @@ export class OrgService {
         const new_semester_courses: Course[] = await Promise.all(
           semesterCourses.map(async (semesterCourse) => {
             const new_semester_course = new Course();
+            new_semester_course.course_code = `${semester.class.department.faculty.college.organization.id}-${semesterCourse.code}`;
             new_semester_course.name = semesterCourse.name;
             new_semester_course.credits = semesterCourse.credits;
             new_semester_course.semesters = [semester];
@@ -579,6 +976,56 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_semester_courses);
+      },
+    );
+  }
+
+  async validateCourseData({
+    organizationEmail,
+    courses,
+  }: {
+    organizationEmail: string;
+    courses: CreateCourseInput[];
+  }) {
+    return await this.courseRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+          },
+        );
+
+        // THROW an error if that organization does not exist
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const errors: ValidationResponseType[] = [];
+
+        await Promise.all(
+          courses.map(async (course) => {
+            const existing_course_by_code =
+              await transactionalEntityManager.findOne(Course, {
+                where: {
+                  course_code: `${organization.id}-${course.code}`,
+                },
+              });
+
+            if (existing_course_by_code) {
+              errors.push({
+                field: 'code',
+                input: course.code,
+                message: 'Course with this code already exist',
+              });
+            }
+          }),
+        );
+
+        return errors;
       },
     );
   }

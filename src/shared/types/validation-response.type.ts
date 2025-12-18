@@ -1,0 +1,13 @@
+import { Field, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+export class ValidationResponseType {
+  @Field()
+  field: 'name' | 'email' | 'code' | 'phone_number';
+
+  @Field()
+  input: string;
+
+  @Field()
+  message: string;
+}

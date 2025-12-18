@@ -1,244 +1,139 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { UseGuards } from '@nestjs/common';
+import { Args, Context, Query, Resolver } from '@nestjs/graphql';
+import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
   CreateClassInput,
-  CreateClassSemesterInput,
   CreateCollegeInput,
   CreateCourseInput,
   CreateDepartmentInput,
   CreateFacultyInput,
   CreateLecturerInput,
   CreateStudentInput,
-  PaginationInput,
-} from 'src/shared/inputs';
-import {
-  CollegeType,
-  DepartmentType,
-  FacultyType,
-  LecturerType,
-  RegisterResponseType,
-} from 'src/shared/types';
+} from '../../../shared/inputs';
+import { ValidationResponseType } from '../../../shared/types';
 import { OrgService } from './org.service';
 
 @Resolver()
 export class OrgResolver {
   constructor(private readonly orgService: OrgService) {}
 
-  @Query(() => CollegeType)
-  listOrganizationColleges(
-    @Args('searchTerm') searchTerm: string,
-    @Args('organizationId', { nullable: true }) organizationId?: string,
-    @Args('pagination', { nullable: true }) pagination?: PaginationInput,
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateCollegeData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('colleges', { type: () => [CreateCollegeInput!]!, nullable: false })
+    colleges: CreateCollegeInput[],
   ) {
-    return this.orgService.listOrganizationCollegePaginated({
-      organizationId,
-      searchTerm,
-      pagination,
+    const { email } = context.req.user;
+
+    return this.orgService.validateCollegeData({
+      organizationEmail: email,
+      colleges,
     });
   }
 
-  @Query(() => DepartmentType)
-  async listOrganizationDepartments() {
-    return {
-      departments: [
-        {
-          id: '1',
-          name: 'Computer Science Department',
-        },
-        {
-          id: '2',
-          name: 'Mathematics Department',
-        },
-      ],
-    };
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateFacultyData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('faculties', { type: () => [CreateFacultyInput!]!, nullable: false })
+    faculties: CreateFacultyInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.validateFacultyData({
+      organizationEmail: email,
+      faculties,
+    });
   }
 
-  @Query(() => CollegeType)
-  async getOrganizationCollege(
-    @Args('input') input: 'collegeId',
-  ): Promise<CollegeType> {
-    console.log(input);
-    return {
-      colleges: [
-        {
-          id: '1',
-          name: 'Science College',
-        },
-      ],
-    };
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateDepartmentData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('departments', {
+      type: () => [CreateDepartmentInput!]!,
+      nullable: false,
+    })
+    departments: CreateDepartmentInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.validateDepartmentData({
+      organizationEmail: email,
+      departments,
+    });
   }
 
-  @Query(() => DepartmentType)
-  async getOrganizationDepartMent(
-    @Args('input') input: 'departmentId',
-  ): Promise<DepartmentType> {
-    console.log(input);
-    return {
-      departments: [
-        {
-          id: '1',
-          name: 'Biomedical Department',
-        },
-      ],
-    };
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateLectureData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('lecturers', {
+      type: () => [CreateLecturerInput!]!,
+      nullable: false,
+    })
+    lecturers: CreateLecturerInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.validateLecturerData({
+      organizationEmail: email,
+      lecturers,
+    });
   }
 
-  @Mutation(() => CollegeType)
-  async createOrganizationCollege(
-    @Args('input') input: CreateCollegeInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'College created successfully',
-    };
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateClassData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('classes', {
+      type: () => [CreateClassInput!]!,
+      nullable: false,
+    })
+    classes: CreateClassInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.validateClassData({
+      organizationEmail: email,
+      classes,
+    });
   }
 
-  @Mutation(() => DepartmentType)
-  async createOrganizationDepartment(
-    @Args('input') input: CreateDepartmentInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Department created successfully',
-    };
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateStudentData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('students', {
+      type: () => [CreateStudentInput!]!,
+      nullable: false,
+    })
+    students: CreateStudentInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.validateStudentData({
+      organizationEmail: email,
+      students,
+    });
   }
 
-  @Mutation(() => FacultyType)
-  async createOrganizationFaculty(
-    @Args('input') input: CreateFacultyInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Faculty created successfully',
-    };
-  }
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ValidationResponseType])
+  validateCourseData(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('courses', {
+      type: () => [CreateCourseInput!]!,
+      nullable: false,
+    })
+    courses: CreateCourseInput[],
+  ) {
+    const { email } = context.req.user;
 
-  // @Mutation(() => LecturerType)
-  // async createLecturer(
-  //   @Args('input') input: CreateLecturerInput,
-  // ): Promise<LecturerType> {
-  //   console.log(input);
-  //   return {
-  //     email: input.email,
-  //     id: '1',
-  //     firstName: input.firstName,
-  //     lastName: input.lastName,
-  //     // facultyId: input.facultyId,
-  //   };
-  // }
-
-  @Mutation(() => RegisterResponseType)
-  async assignLecturerToDepartment(
-    @Args('lecturerId') lecturerId: string,
-    @Args('departmentId') departmentId: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ lecturerId, departmentId });
-    return {
-      message: 'Lecturer assigned to department successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async createClass(
-    @Args('input') input: CreateClassInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Class created successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async assignClassToDepartment(
-    @Args('classId') classId: string,
-    @Args('departmentId') departmentId: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ classId, departmentId });
-    return {
-      message: 'Class assigned to department successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async createClassSemester(
-    @Args('input') input: CreateClassSemesterInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Class semester created successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async createCourse(
-    @Args('input') input: CreateCourseInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Course created successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async assignCourseToClassSemester(
-    @Args('courseId') courseId: string,
-    @Args('classSemesterId') classSemesterId: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ courseId, classSemesterId });
-    return {
-      message: 'Course assigned to class semester successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async createStudent(
-    @Args('input') input: CreateStudentInput,
-  ): Promise<RegisterResponseType> {
-    console.log(input);
-    return {
-      message: 'Student created successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async assignStudentToClass(
-    @Args('studentId') studentId: string,
-    @Args('classId') classId: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ studentId, classId });
-    return {
-      message: 'Student assigned to class successfully',
-    };
-  }
-
-  @Mutation(() => RegisterResponseType)
-  async enrollStudentInCourse(
-    @Args('studentId') studentId: string,
-    @Args('courseId') courseId: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ studentId, courseId });
-    return {
-      message: 'Student enrolled in course successfully',
-    };
-  }
-
-  // @Mutation(() => RegisterResponseType)
-  // async createSemesterCourse(
-  //   @Args('input') input: CreateCourseInput,
-  // ): Promise<RegisterResponseType> {
-  //   console.log(input);
-  //   return {
-  //     message: 'Semester course created successfully',
-  //   };
-  // }
-
-  @Mutation(() => RegisterResponseType)
-  async uploadCourseMaterial(
-    @Args('courseId') courseId: string,
-    @Args('materialUrl') materialUrl: string,
-  ): Promise<RegisterResponseType> {
-    console.log({ courseId, materialUrl });
-    return {
-      message: 'Course material uploaded successfully',
-    };
+    return this.orgService.validateCourseData({
+      organizationEmail: email,
+      courses,
+    });
   }
 }

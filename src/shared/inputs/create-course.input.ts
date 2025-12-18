@@ -7,4 +7,7 @@ export class CreateCourseInput {
 
   @Field()
   name: string;
+
+  @Field()
+  code: string;
 }

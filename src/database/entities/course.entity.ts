@@ -6,15 +6,18 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Semester } from './semester.entity';
-import { CourseTest } from './course-test.entity';
 import { CourseExam } from './course-exam.entity';
 import { CourseMaterial } from './course-material.entity';
+import { CourseTest } from './course-test.entity';
+import { Semester } from './semester.entity';
 
 @Entity('courses')
 export class Course {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ unique: true })
+  course_code: string;
 
   @Column()
   credits: number;
