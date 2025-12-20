@@ -1,6 +1,6 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Gender } from '../../shared/enums';
 import { Class } from './class.entity';
-import { Gender } from './lecturer.entity';
 
 @Entity('students')
 export class Student {

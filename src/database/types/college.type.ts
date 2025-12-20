@@ -7,4 +7,7 @@ export class CollegeTypeClass {
 
   @Field()
   name: string;
+
+  @Field()
+  email: string;
 }

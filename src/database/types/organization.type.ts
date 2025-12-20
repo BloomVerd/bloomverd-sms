@@ -7,4 +7,7 @@ export class OrganizationTypeClass {
 
   @Field()
   email: string;
+
+  @Field()
+  name: string;
 }

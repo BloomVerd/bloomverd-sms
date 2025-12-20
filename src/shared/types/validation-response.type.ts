@@ -1,12 +1,24 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 
+export type ValidationFieldType =
+  | 'name'
+  | 'email'
+  | 'code'
+  | 'phone_number'
+  | 'first_name'
+  | 'last_name'
+  | 'gender'
+  | 'date_of_birth'
+  | 'address'
+  | 'credits';
+
 @ObjectType()
 export class ValidationResponseType {
   @Field()
-  index: number;
+  id: string;
 
   @Field()
-  field: 'name' | 'email' | 'code' | 'phone_number';
+  field: ValidationFieldType;
 
   @Field()
   input: string;

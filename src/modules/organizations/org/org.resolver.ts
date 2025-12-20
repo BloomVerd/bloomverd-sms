@@ -1,5 +1,6 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { CollegeTypeClass } from 'src/database/types';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
   CreateClassInput,
@@ -25,6 +26,21 @@ import { OrgService } from './org.service';
 @Resolver()
 export class OrgResolver {
   constructor(private readonly orgService: OrgService) {}
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [CollegeTypeClass])
+  createColleges(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('colleges', { type: () => [CreateCollegeInput!]!, nullable: false })
+    colleges: CreateCollegeInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.createColleges({
+      organizationEmail: email,
+      colleges,
+    });
+  }
 
   @UseGuards(GqlJwtAuthGuard)
   @Query(() => [ValidationResponseType])

@@ -14,6 +14,13 @@ import {
   Student,
 } from '../../../database/entities';
 import {
+  getDateValidationError,
+  getEmailValidationError,
+  getPhoneValidationError,
+  validateEnum,
+  validateRequiredString,
+} from '../../../shared/helpers';
+import {
   CreateClassInput,
   CreateClassWithRelationshipInput,
   CreateCollegeInput,
@@ -30,7 +37,10 @@ import {
   CreateStudentWithRelationshipInput,
   PaginationInput,
 } from '../../../shared/inputs';
-import { ValidationResponseType } from '../../../shared/types';
+import {
+  ValidationFieldType,
+  ValidationResponseType,
+} from '../../../shared/types';
 
 @Injectable()
 export class OrgService {
@@ -55,6 +65,41 @@ export class OrgService {
     private studentRepository: Repository<Student>,
   ) {}
 
+  /**
+   * Check for duplicate values within the submitted data array
+   * @param items Array of items to check
+   * @param fieldsToCheck Fields to check for duplicates
+   * @returns Map of field -> Map of value -> array of item IDs with that value
+   */
+  private findDuplicatesInData<T extends { id: string }>(
+    items: T[],
+    fieldsToCheck: (keyof T)[],
+  ): Map<string, Map<string, string[]>> {
+    const result = new Map<string, Map<string, string[]>>();
+
+    fieldsToCheck.forEach((field) => {
+      const fieldMap = new Map<string, string[]>();
+
+      items.forEach((item) => {
+        const value = item[field];
+        const normalizedValue =
+          typeof value === 'string'
+            ? value.trim().toLowerCase()
+            : String(value);
+
+        if (!fieldMap.has(normalizedValue)) {
+          fieldMap.set(normalizedValue, []);
+        }
+        // @ts-expect-error error
+        fieldMap?.get(normalizedValue).push(item.id);
+      });
+
+      result.set(String(field), fieldMap);
+    });
+
+    return result;
+  }
+
   async createColleges({
     organizationEmail,
     colleges,
@@ -64,7 +109,6 @@ export class OrgService {
   }) {
     return await this.collegeRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the organization creating the colleges
         const organization = await transactionalEntityManager.findOne(
           Organization,
           {
@@ -74,13 +118,11 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
         }
 
-        // CREATE new college for organization
         const new_colleges: College[] = await Promise.all(
           colleges.map(async (college) => {
             const new_college = new College();
@@ -92,7 +134,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_colleges
         this.logger.log(
           `Created ${new_colleges.length} college(s) successfully`,
         );
@@ -101,6 +142,10 @@ export class OrgService {
     );
   }
 
+  /**
+   * COLLEGE VALIDATION
+   * Validates: email format, name required, duplicates (in data and database)
+   */
   async validateCollegeData({
     organizationEmail,
     colleges,
@@ -119,7 +164,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -127,8 +171,59 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(colleges, [
+          'email',
+          'name',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              // This value appears multiple times in submitted data
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field: fieldName as ValidationFieldType,
+                  input: value,
+                  message: `This ${fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          colleges.map(async (college, index) => {
+          colleges.map(async (college) => {
+            // ✅ Validate email format
+            const emailError = getEmailValidationError(college.email);
+            if (emailError) {
+              errors.push({
+                id: college.id,
+                field: 'email',
+                input: college.email,
+                message: emailError,
+              });
+            }
+
+            // ✅ Validate name is required and not empty
+            const nameError = validateRequiredString(
+              college.name,
+              'College name',
+              1,
+              255,
+            );
+            if (nameError) {
+              errors.push({
+                id: college.id,
+                field: 'name',
+                input: college.name,
+                message: nameError,
+              });
+            }
+
+            // ✅ Check for duplicate name in database
             const existing_college_by_name =
               await transactionalEntityManager.findOne(College, {
                 where: {
@@ -138,13 +233,14 @@ export class OrgService {
 
             if (existing_college_by_name) {
               errors.push({
+                id: college.id,
                 field: 'name',
                 input: college.name,
-                message: 'College with this name already exist',
-                index,
+                message: 'College with this name already exists in database',
               });
             }
 
+            // ✅ Check for duplicate email in database
             const existing_college_by_email =
               await transactionalEntityManager.findOne(College, {
                 where: {
@@ -157,10 +253,10 @@ export class OrgService {
 
             if (existing_college_by_email) {
               errors.push({
+                id: college.id,
                 field: 'email',
                 input: college.email,
-                message: 'College with this email already exist',
-                index,
+                message: 'College with this email already exists in database',
               });
             }
           }),
@@ -180,7 +276,6 @@ export class OrgService {
   }) {
     return await this.facultyRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the college creating the faculties
         const college = await transactionalEntityManager.findOne(College, {
           where: {
             email: collegeEmail,
@@ -188,13 +283,11 @@ export class OrgService {
           relations: ['organization'],
         });
 
-        // THROW an error if that college does not exist
         if (!college) {
           this.logger.error('College not found!');
           throw new BadRequestException('College not found!');
         }
 
-        // CREATE new faculties for organization
         const new_faculties: Faculty[] = await Promise.all(
           faculties.map(async (faculty) => {
             const new_faculty = new Faculty();
@@ -206,7 +299,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_faculties
         this.logger.log(
           `Created ${new_faculties.length} faculties(s) for college: ${college.name} successfully`,
         );
@@ -215,6 +307,10 @@ export class OrgService {
     );
   }
 
+  /**
+   * FACULTY VALIDATION
+   * Validates: email format, name required, duplicates (in data and database)
+   */
   async validateFacultyData({
     organizationEmail,
     faculties,
@@ -233,7 +329,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -241,8 +336,58 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(faculties, [
+          'email',
+          'name',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field: fieldName as ValidationFieldType,
+                  input: value,
+                  message: `This ${fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          faculties.map(async (faculty, index) => {
+          faculties.map(async (faculty) => {
+            // ✅ Validate email format
+            const emailError = getEmailValidationError(faculty.email);
+            if (emailError) {
+              errors.push({
+                id: faculty.id,
+                field: 'email',
+                input: faculty.email,
+                message: emailError,
+              });
+            }
+
+            // ✅ Validate name is required and not empty
+            const nameError = validateRequiredString(
+              faculty.name,
+              'Faculty name',
+              1,
+              255,
+            );
+            if (nameError) {
+              errors.push({
+                id: faculty.id,
+                field: 'name',
+                input: faculty.name,
+                message: nameError,
+              });
+            }
+
+            // ✅ Check for duplicate name in database
             const existing_faculty_by_name =
               await transactionalEntityManager.findOne(Faculty, {
                 where: {
@@ -252,13 +397,14 @@ export class OrgService {
 
             if (existing_faculty_by_name) {
               errors.push({
+                id: faculty.id,
                 field: 'name',
-                input: `${organization.id}-${faculty.name}`,
-                message: 'Faculty with this name already exist',
-                index,
+                input: faculty.name,
+                message: 'Faculty with this name already exists in database',
               });
             }
 
+            // ✅ Check for duplicate email in database
             const existing_faculty_by_email =
               await transactionalEntityManager.findOne(Faculty, {
                 where: {
@@ -273,10 +419,10 @@ export class OrgService {
 
             if (existing_faculty_by_email) {
               errors.push({
+                id: faculty.id,
                 field: 'email',
                 input: faculty.email,
-                message: 'Faculty with this email already exist',
-                index,
+                message: 'Faculty with this email already exists in database',
               });
             }
           }),
@@ -296,7 +442,6 @@ export class OrgService {
   }) {
     return await this.departmentRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the faculty creating the departments
         const faculty = await transactionalEntityManager.findOne(Faculty, {
           where: {
             email: facultyEmail,
@@ -304,13 +449,11 @@ export class OrgService {
           relations: ['college.organization'],
         });
 
-        // THROW an error if that faculty does not exist
         if (!faculty) {
           this.logger.error('Faculty not found!');
           throw new BadRequestException('Faculty not found!');
         }
 
-        // CREATE new departments for faculty
         const new_departments: Department[] = await Promise.all(
           departments.map(async (department) => {
             const new_department = new Department();
@@ -322,7 +465,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_departments
         this.logger.log(
           `Created ${new_departments.length} department(s) for faculty: ${faculty.name} successfully`,
         );
@@ -331,6 +473,10 @@ export class OrgService {
     );
   }
 
+  /**
+   * DEPARTMENT VALIDATION
+   * Validates: email format, name required, duplicates (in data and database)
+   */
   async validateDepartmentData({
     organizationEmail,
     departments,
@@ -349,7 +495,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -357,8 +502,58 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(departments, [
+          'email',
+          'name',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field: fieldName as ValidationFieldType,
+                  input: value,
+                  message: `This ${fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          departments.map(async (department, index) => {
+          departments.map(async (department) => {
+            // ✅ Validate email format
+            const emailError = getEmailValidationError(department.email);
+            if (emailError) {
+              errors.push({
+                id: department.id,
+                field: 'email',
+                input: department.email,
+                message: emailError,
+              });
+            }
+
+            // ✅ Validate name is required and not empty
+            const nameError = validateRequiredString(
+              department.name,
+              'Department name',
+              1,
+              255,
+            );
+            if (nameError) {
+              errors.push({
+                id: department.id,
+                field: 'name',
+                input: department.name,
+                message: nameError,
+              });
+            }
+
+            // ✅ Check for duplicate name in database
             const existing_department_by_name =
               await transactionalEntityManager.findOne(Department, {
                 where: {
@@ -368,13 +563,14 @@ export class OrgService {
 
             if (existing_department_by_name) {
               errors.push({
+                id: department.id,
                 field: 'name',
                 input: department.name,
-                message: 'Department with this name already exist',
-                index,
+                message: 'Department with this name already exists in database',
               });
             }
 
+            // ✅ Check for duplicate email in database
             const existing_department_by_email =
               await transactionalEntityManager.findOne(Department, {
                 where: {
@@ -391,10 +587,11 @@ export class OrgService {
 
             if (existing_department_by_email) {
               errors.push({
+                id: department.id,
                 field: 'email',
                 input: department.email,
-                message: 'Department with this email already exist',
-                index,
+                message:
+                  'Department with this email already exists in database',
               });
             }
           }),
@@ -414,7 +611,6 @@ export class OrgService {
   }) {
     return await this.lecturerRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the organization creating the lecturers
         const organization = await transactionalEntityManager.findOne(
           Organization,
           {
@@ -424,13 +620,11 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
         }
 
-        // CREATE new college for organization
         const new_lecturers: Lecturer[] = await Promise.all(
           lecturers.map(async (lecturer) => {
             const new_lecturer = new Lecturer();
@@ -447,7 +641,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_colleges
         this.logger.log(
           `Created ${new_lecturers.length} lecturer(s) successfully`,
         );
@@ -467,7 +660,6 @@ export class OrgService {
   }) {
     return await this.lecturerRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the department when updating the lecturers
         const department = await transactionalEntityManager.findOne(
           Department,
           {
@@ -484,13 +676,11 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that department does not exist
         if (!department) {
           this.logger.error('Department not found!');
           throw new BadRequestException('Department not found!');
         }
 
-        // CREATE update department for lecturers
         const updated_lecturers: Lecturer[] = await Promise.all(
           lecturerIds.map(async (lecturerId) => {
             const lecturer = await transactionalEntityManager.findOne(
@@ -526,7 +716,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk update for lecturers
         this.logger.log(
           `${updated_lecturers.length} lecturer(s) updated successfully`,
         );
@@ -535,6 +724,11 @@ export class OrgService {
     );
   }
 
+  /**
+   * LECTURER VALIDATION
+   * Validates: email format, phone format, firstName required, lastName required,
+   * gender enum, dateOfBirth, address, duplicates (in data and database)
+   */
   async validateLecturerData({
     organizationEmail,
     lecturers,
@@ -553,7 +747,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -561,8 +754,133 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(lecturers, [
+          'email',
+          'phoneNumber',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field:
+                    fieldName === 'phoneNumber'
+                      ? 'phone_number'
+                      : (fieldName as ValidationFieldType),
+                  input: value,
+                  message: `This ${fieldName === 'phoneNumber' ? 'phone number' : fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          lecturers.map(async (lecturer, index) => {
+          lecturers.map(async (lecturer) => {
+            // ✅ Validate email format
+            const emailError = getEmailValidationError(lecturer.email);
+            if (emailError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'email',
+                input: lecturer.email,
+                message: emailError,
+              });
+            }
+
+            // ✅ Validate firstName
+            const firstNameError = validateRequiredString(
+              lecturer.firstName,
+              'First name',
+              1,
+              100,
+            );
+            if (firstNameError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'first_name',
+                input: lecturer.firstName,
+                message: firstNameError,
+              });
+            }
+
+            // ✅ Validate lastName
+            const lastNameError = validateRequiredString(
+              lecturer.lastName,
+              'Last name',
+              1,
+              100,
+            );
+            if (lastNameError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'last_name',
+                input: lecturer.lastName,
+                message: lastNameError,
+              });
+            }
+
+            // ✅ Validate gender enum
+            const genderError = validateEnum(
+              lecturer.gender,
+              ['Male', 'Female', 'Other'],
+              'Gender',
+            );
+            if (genderError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'gender',
+                input: lecturer.gender,
+                message: genderError,
+              });
+            }
+
+            // ✅ Validate dateOfBirth
+            const dateError = getDateValidationError(
+              lecturer.dateOfBirth,
+              'Date of birth',
+            );
+            if (dateError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'date_of_birth',
+                input: new Date(lecturer.dateOfBirth).toISOString(),
+                message: dateError,
+              });
+            }
+
+            // ✅ Validate address
+            const addressError = validateRequiredString(
+              lecturer.address,
+              'Address',
+              1,
+              500,
+            );
+            if (addressError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'address',
+                input: lecturer.address,
+                message: addressError,
+              });
+            }
+
+            // ✅ Validate phone number
+            const phoneError = getPhoneValidationError(lecturer.phoneNumber);
+            if (phoneError) {
+              errors.push({
+                id: lecturer.id,
+                field: 'phone_number',
+                input: lecturer.phoneNumber,
+                message: phoneError,
+              });
+            }
+
+            // ✅ Check for duplicate email in database
             const existing_lecturer_by_email =
               await transactionalEntityManager.findOne(Lecturer, {
                 where: {
@@ -572,13 +890,14 @@ export class OrgService {
 
             if (existing_lecturer_by_email) {
               errors.push({
+                id: lecturer.id,
                 field: 'email',
                 input: lecturer.email,
-                message: 'Course with this email already exist',
-                index,
+                message: 'Lecturer with this email already exists in database',
               });
             }
 
+            // ✅ Check for duplicate phone number in database
             const existing_lecturer_by_phone_number =
               await transactionalEntityManager.findOne(Lecturer, {
                 where: {
@@ -588,10 +907,11 @@ export class OrgService {
 
             if (existing_lecturer_by_phone_number) {
               errors.push({
+                id: lecturer.id,
                 field: 'phone_number',
                 input: lecturer.phoneNumber,
-                message: 'Course with this phone number already exist',
-                index,
+                message:
+                  'Lecturer with this phone number already exists in database',
               });
             }
           }),
@@ -613,7 +933,6 @@ export class OrgService {
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the department we are creating the classes for
         const department = await transactionalEntityManager.findOne(
           Department,
           {
@@ -631,13 +950,11 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that department does not exist
         if (!department) {
           this.logger.error('Department not found!');
           throw new BadRequestException('Department not found!');
         }
 
-        // CREATE new classes for faculty
         const new_classes: Class[] = await Promise.all(
           classes.map(async (dep_class) => {
             const new_class = new Class();
@@ -648,7 +965,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_classes
         this.logger.log(
           `Created ${new_classes.length} department class(es) for department: ${department.name} successfully`,
         );
@@ -658,6 +974,10 @@ export class OrgService {
     );
   }
 
+  /**
+   * CLASS VALIDATION
+   * Validates: name required, duplicates (in data and database)
+   */
   async validateClassData({
     organizationEmail,
     classes,
@@ -676,7 +996,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -684,8 +1003,46 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(classes, [
+          'name',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field: fieldName as ValidationFieldType,
+                  input: value,
+                  message: `This ${fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          classes.map(async (depClass, index) => {
+          classes.map(async (depClass) => {
+            // ✅ Validate name is required and not empty
+            const nameError = validateRequiredString(
+              depClass.name,
+              'Class name',
+              1,
+              255,
+            );
+            if (nameError) {
+              errors.push({
+                id: depClass.id,
+                field: 'name',
+                input: depClass.name,
+                message: nameError,
+              });
+            }
+
+            // ✅ Check for duplicate name in database
             const existing_class_by_name =
               await transactionalEntityManager.findOne(Class, {
                 where: {
@@ -695,10 +1052,10 @@ export class OrgService {
 
             if (existing_class_by_name) {
               errors.push({
+                id: depClass.id,
                 field: 'name',
                 input: depClass.name,
-                message: 'Class with this name already exist',
-                index,
+                message: 'Class with this name already exists in database',
               });
             }
           }),
@@ -720,7 +1077,6 @@ export class OrgService {
   }) {
     return await this.semesterRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the class we are creating the semesters for
         const dep_class = await transactionalEntityManager.findOne(Class, {
           where: {
             id: classId,
@@ -736,13 +1092,11 @@ export class OrgService {
           },
         });
 
-        // THROW an error if that class does not exist
         if (!dep_class) {
           this.logger.error('Class not found!');
           throw new BadRequestException('Class not found!');
         }
 
-        // CREATE new semesters for class
         const semesters = [];
 
         for (let i = 1; i < numOfSemesters + 1; i++) {
@@ -758,7 +1112,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_semesters
         this.logger.log(
           `Created ${new_semesters.length} semester(s) for class: ${dep_class.name} successfully`,
         );
@@ -779,7 +1132,6 @@ export class OrgService {
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the class we are creating the students for
         const dep_class = await transactionalEntityManager.findOne(Class, {
           where: {
             id: classId,
@@ -795,13 +1147,11 @@ export class OrgService {
           },
         });
 
-        // THROW an error if that class does not exist
         if (!dep_class) {
           this.logger.error('Class not found!');
           throw new BadRequestException('Class not found!');
         }
 
-        // CREATE new classes for faculty
         const new_students: Student[] = await Promise.all(
           students.map(async (student) => {
             const new_student = new Student();
@@ -819,7 +1169,6 @@ export class OrgService {
           }),
         );
 
-        // PERFORM bulk save for new_students
         this.logger.log(
           `Created ${new_students.length} student(s) for department: ${dep_class.name} successfully`,
         );
@@ -829,6 +1178,11 @@ export class OrgService {
     );
   }
 
+  /**
+   * STUDENT VALIDATION
+   * Validates: email format, phone format, firstName required, lastName required,
+   * gender enum, dateOfBirth, address, duplicates (in data and database)
+   */
   async validateStudentData({
     organizationEmail,
     students,
@@ -847,7 +1201,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -855,8 +1208,133 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(students, [
+          'email',
+          'phoneNumber',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field:
+                    fieldName === 'phoneNumber'
+                      ? 'phone_number'
+                      : (fieldName as ValidationFieldType),
+                  input: value,
+                  message: `This ${fieldName === 'phoneNumber' ? 'phone number' : fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          students.map(async (student, index) => {
+          students.map(async (student) => {
+            // ✅ Validate email format
+            const emailError = getEmailValidationError(student.email);
+            if (emailError) {
+              errors.push({
+                id: student.id,
+                field: 'email',
+                input: student.email,
+                message: emailError,
+              });
+            }
+
+            // ✅ Validate firstName
+            const firstNameError = validateRequiredString(
+              student.firstName,
+              'First name',
+              1,
+              100,
+            );
+            if (firstNameError) {
+              errors.push({
+                id: student.id,
+                field: 'first_name',
+                input: student.firstName,
+                message: firstNameError,
+              });
+            }
+
+            // ✅ Validate lastName
+            const lastNameError = validateRequiredString(
+              student.lastName,
+              'Last name',
+              1,
+              100,
+            );
+            if (lastNameError) {
+              errors.push({
+                id: student.id,
+                field: 'last_name',
+                input: student.lastName,
+                message: lastNameError,
+              });
+            }
+
+            // ✅ Validate gender enum
+            const genderError = validateEnum(
+              student.gender,
+              ['Male', 'Female', 'Other'],
+              'Gender',
+            );
+            if (genderError) {
+              errors.push({
+                id: student.id,
+                field: 'gender',
+                input: student.gender,
+                message: genderError,
+              });
+            }
+
+            // ✅ Validate dateOfBirth
+            const dateError = getDateValidationError(
+              student.dateOfBirth,
+              'Date of birth',
+            );
+            if (dateError) {
+              errors.push({
+                id: student.id,
+                field: 'date_of_birth',
+                input: new Date(student.dateOfBirth).toISOString(),
+                message: dateError,
+              });
+            }
+
+            // ✅ Validate address
+            const addressError = validateRequiredString(
+              student.address,
+              'Address',
+              1,
+              500,
+            );
+            if (addressError) {
+              errors.push({
+                id: student.id,
+                field: 'address',
+                input: student.address,
+                message: addressError,
+              });
+            }
+
+            // ✅ Validate phone number
+            const phoneError = getPhoneValidationError(student.phoneNumber);
+            if (phoneError) {
+              errors.push({
+                id: student.id,
+                field: 'phone_number',
+                input: student.phoneNumber,
+                message: phoneError,
+              });
+            }
+
+            // ✅ Check for duplicate email in database
             const existing_student_by_email =
               await transactionalEntityManager.findOne(Student, {
                 where: {
@@ -866,13 +1344,14 @@ export class OrgService {
 
             if (existing_student_by_email) {
               errors.push({
+                id: student.id,
                 field: 'email',
                 input: student.email,
-                message: 'Student with this email already exist',
-                index,
+                message: 'Student with this email already exists in database',
               });
             }
 
+            // ✅ Check for duplicate phone number in database
             const existing_student_by_phone_number =
               await transactionalEntityManager.findOne(Student, {
                 where: {
@@ -882,10 +1361,11 @@ export class OrgService {
 
             if (existing_student_by_phone_number) {
               errors.push({
+                id: student.id,
                 field: 'phone_number',
                 input: student.phoneNumber,
-                message: 'Student with this phone number already exist',
-                index,
+                message:
+                  'Student with this phone number already exists in database',
               });
             }
           }),
@@ -907,7 +1387,6 @@ export class OrgService {
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // get the semester we are creating the course for
         const semester = await transactionalEntityManager.findOne(Semester, {
           where: {
             id: semesterId,
@@ -926,13 +1405,11 @@ export class OrgService {
           relations: ['class.department.faculty.college.organization'],
         });
 
-        //  Throw errror if semester does not exist
         if (!semester) {
           this.logger.error('Semester not found!');
           throw new BadRequestException('semester not found!');
         }
 
-        // create semester course
         const new_semester_courses: Course[] = await Promise.all(
           semesterCourses.map(async (semesterCourse) => {
             const new_semester_course = new Course();
@@ -945,7 +1422,6 @@ export class OrgService {
           }),
         );
 
-        // perform new semester course save
         this.logger.log(
           `Created ${new_semester_courses.length} course(s) for semester: ${semester.id} successfully`,
         );
@@ -955,6 +1431,10 @@ export class OrgService {
     );
   }
 
+  /**
+   * COURSE VALIDATION
+   * Validates: name required, code required, credits validation, duplicates (in data and database)
+   */
   async validateCourseData({
     organizationEmail,
     courses,
@@ -973,7 +1453,6 @@ export class OrgService {
           },
         );
 
-        // THROW an error if that organization does not exist
         if (!organization) {
           this.logger.error('Organiztion not found!');
           throw new BadRequestException('Organiztion not found!');
@@ -981,8 +1460,84 @@ export class OrgService {
 
         const errors: ValidationResponseType[] = [];
 
+        // ✅ Check for duplicates within submitted data
+        const duplicatesInData = this.findDuplicatesInData(courses, [
+          'code',
+        ] as const);
+
+        // Process duplicates found in submitted data
+        duplicatesInData.forEach((fieldMap, fieldName) => {
+          fieldMap.forEach((ids, value) => {
+            if (ids.length > 1) {
+              ids.forEach((id) => {
+                errors.push({
+                  id: id,
+                  field: fieldName as ValidationFieldType,
+                  input: value,
+                  message: `This ${fieldName} is duplicated within the submitted data`,
+                });
+              });
+            }
+          });
+        });
+
         await Promise.all(
-          courses.map(async (course, index) => {
+          courses.map(async (course) => {
+            // ✅ Validate name is required
+            const nameError = validateRequiredString(
+              course.name,
+              'Course name',
+              1,
+              255,
+            );
+            if (nameError) {
+              errors.push({
+                id: course.id,
+                field: 'name',
+                input: course.name,
+                message: nameError,
+              });
+            }
+
+            // ✅ Validate code is required
+            const codeError = validateRequiredString(
+              course.code,
+              'Course code',
+              1,
+              50,
+            );
+            if (codeError) {
+              errors.push({
+                id: course.id,
+                field: 'code',
+                input: course.code,
+                message: codeError,
+              });
+            }
+
+            // ✅ Validate credits
+            let creditsError = null;
+            if (course.credits === null || course.credits === undefined) {
+              creditsError = 'Credits is required';
+            } else {
+              const creditsNum = Number(course.credits);
+              if (isNaN(creditsNum)) {
+                creditsError = 'Credits must be a number';
+              } else if (creditsNum < 1 || creditsNum > 10) {
+                creditsError = 'Credits must be between 1 and 10';
+              }
+            }
+
+            if (creditsError) {
+              errors.push({
+                id: course.id,
+                field: 'credits',
+                input: `${course.credits}`,
+                message: creditsError,
+              });
+            }
+
+            // ✅ Check for duplicate course code in database
             const existing_course_by_code =
               await transactionalEntityManager.findOne(Course, {
                 where: {
@@ -992,10 +1547,10 @@ export class OrgService {
 
             if (existing_course_by_code) {
               errors.push({
+                id: course.id,
                 field: 'code',
                 input: course.code,
-                message: 'Course with this code already exist',
-                index,
+                message: 'Course with this code already exists in database',
               });
             }
           }),
@@ -1017,7 +1572,6 @@ export class OrgService {
   }) {
     return await this.courseRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // GET the course we are uploading material for
         const course = await transactionalEntityManager.findOne(Course, {
           where: {
             id: courseId,
@@ -1037,7 +1591,6 @@ export class OrgService {
           },
         });
 
-        // THROW an error if that course does not exist
         if (!course) {
           this.logger.error('Course not found!');
           throw new BadRequestException('Course not found!');
@@ -1053,7 +1606,6 @@ export class OrgService {
             return new_course_material;
           }),
         );
-        // Log the upload action
         this.logger.log(
           `Uploaded materials for course: ${course.id} successfully`,
         );
@@ -1082,7 +1634,6 @@ export class OrgService {
     students: CreateStudentWithRelationshipInput[];
     courses: CreateCourseWithRelationshipInput[];
   }) {
-    // Validate all fields
     if (colleges.length) {
       const errors = await this.validateCollegeData({
         organizationEmail,
@@ -1146,8 +1697,6 @@ export class OrgService {
       if (errors.length) throw new BadRequestException(errors);
     }
 
-    // Spin up a background job to process the data
-
     return {
       message:
         'An in-app notification or email will be sent to you after everything is done setting up',
@@ -1161,21 +1710,18 @@ export class OrgService {
   ) {
     const { first, after, last, before } = paginationInput;
 
-    // Default values
     const defaultFirst = 10;
     let limit = first || defaultFirst;
     let afterIndex = -1;
     let beforeIndex = items.length;
 
-    // Determine indices based on cursors
     if (after) {
       const decodedCursor = this.decodeCursor(after);
       afterIndex = items.findIndex(
         (item) => String(cursorExtractor(item)) === decodedCursor,
       );
-      if (afterIndex === -1)
-        afterIndex = -1; // Not found
-      else afterIndex = afterIndex; // Include items after this index
+      if (afterIndex === -1) afterIndex = -1;
+      else afterIndex = afterIndex;
     }
 
     if (before) {
@@ -1183,12 +1729,10 @@ export class OrgService {
       beforeIndex = items.findIndex(
         (item) => String(cursorExtractor(item)) === decodedCursor,
       );
-      if (beforeIndex === -1)
-        beforeIndex = items.length; // Not found
-      else beforeIndex = beforeIndex; // Include items before this index
+      if (beforeIndex === -1) beforeIndex = items.length;
+      else beforeIndex = beforeIndex;
     }
 
-    // Handle the 'last' parameter by adjusting the starting point
     if (last) {
       const potentialCount = beforeIndex - afterIndex - 1;
       if (potentialCount > last) {
@@ -1197,21 +1741,17 @@ export class OrgService {
       limit = last;
     }
 
-    // Get the paginated items
     const slicedItems = items.slice(afterIndex + 1, beforeIndex);
     const paginatedItems = slicedItems.slice(0, limit);
 
-    // Create edges with cursors
     const edges = paginatedItems.map((item) => ({
       cursor: this.encodeCursor(String(cursorExtractor(item))),
       node: item,
     }));
 
-    // Determine if there are more pages
     const hasNextPage = beforeIndex > afterIndex + 1 + paginatedItems.length;
     const hasPreviousPage = afterIndex >= 0;
 
-    // Create the pageInfo object
     const pageInfo = {
       hasNextPage,
       hasPreviousPage,
@@ -1226,16 +1766,10 @@ export class OrgService {
     };
   }
 
-  /**
-   * Encode a cursor to Base64
-   */
   private encodeCursor(cursor: string): string {
     return Buffer.from(cursor).toString('base64');
   }
 
-  /**
-   * Decode a cursor from Base64
-   */
   private decodeCursor(cursor: string): string {
     return Buffer.from(cursor, 'base64').toString('utf-8');
   }

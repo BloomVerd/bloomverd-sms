@@ -8,13 +8,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Gender } from '../../shared/enums';
 import { Department } from './department.entity';
 import { Organization } from './organization.entity';
-
-export enum Gender {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE',
-}
 
 @Entity('lecturers')
 export class Lecturer {

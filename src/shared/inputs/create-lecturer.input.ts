@@ -1,8 +1,11 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { Gender } from 'src/database/entities/lecturer.entity';
+import { Gender } from '../enums';
 
 @InputType()
 export class CreateLecturerInput {
+  @Field()
+  id: string;
+
   @Field()
   email: string;
 

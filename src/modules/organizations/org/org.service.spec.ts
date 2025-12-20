@@ -16,7 +16,7 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
-import { Gender } from '../../../database/entities/lecturer.entity';
+import { Gender } from '../../../shared/enums';
 import { HashHelper } from '../../../shared/helpers';
 import { OrgService } from './org.service';
 
@@ -775,10 +775,12 @@ describe('OrganizationService', () => {
   // DATA
   const collegesData = [
     {
+      id: '1',
       name: 'Test College',
       email: 'college@gmail.com',
     },
     {
+      id: '2',
       name: 'Test Colleges',
       email: 'college1@gmail.com',
     },
@@ -786,10 +788,12 @@ describe('OrganizationService', () => {
 
   const facultyData = [
     {
+      id: '1',
       name: 'Test Faculty',
       email: 'faculty@gmail.com',
     },
     {
+      id: '2',
       name: 'Test Facultys',
       email: 'faculty1@gmail.com',
     },
@@ -797,10 +801,12 @@ describe('OrganizationService', () => {
 
   const departmentData = [
     {
+      id: '1',
       name: 'Test Department',
       email: 'department@gmail.com',
     },
     {
+      id: '2',
       name: 'Test Departments',
       email: 'department1@gmail.com',
     },
@@ -808,6 +814,7 @@ describe('OrganizationService', () => {
 
   const lecturerData = [
     {
+      id: '1',
       email: 'lecture1@gmail.com',
       firstName: 'Lecturer',
       lastName: 'One',
@@ -817,6 +824,7 @@ describe('OrganizationService', () => {
       dateOfBirth: new Date(),
     },
     {
+      id: '2',
       email: 'lecture2@gmail.com',
       firstName: 'Lecturer',
       lastName: 'Two',
@@ -829,15 +837,18 @@ describe('OrganizationService', () => {
 
   const classData = [
     {
+      id: '1',
       name: 'biomed class 2025',
     },
     {
+      id: '2',
       name: 'biomed class 2026',
     },
   ];
 
   const studentData = [
     {
+      id: '1',
       email: 'student1@gmail.com',
       firstName: 'Student',
       lastName: 'One',
@@ -847,6 +858,7 @@ describe('OrganizationService', () => {
       dateOfBirth: new Date(),
     },
     {
+      id: '2',
       email: 'student2@gmail.com',
       firstName: 'Student',
       lastName: 'Two',
@@ -859,11 +871,17 @@ describe('OrganizationService', () => {
 
   const coursesData = [
     {
+      id: '1',
       name: 'Introduction to Biology',
       code: 'EL291',
       credits: 3,
     },
-    { name: 'Chemical Compounds', code: 'CW291', credits: 4 },
+    {
+      id: '2',
+      name: 'Chemical Compounds',
+      code: 'CW291',
+      credits: 4,
+    },
   ];
 
   const materialsData = [
