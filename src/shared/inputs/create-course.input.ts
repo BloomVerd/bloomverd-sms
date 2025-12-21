@@ -13,4 +13,7 @@ export class CreateCourseInput {
 
   @Field()
   code: string;
+
+  @Field()
+  semesterNumber: number;
 }

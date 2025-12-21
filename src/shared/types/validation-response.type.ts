@@ -10,7 +10,9 @@ export type ValidationFieldType =
   | 'gender'
   | 'date_of_birth'
   | 'address'
-  | 'credits';
+  | 'credits'
+  | 'number_of_semesters'
+  | 'semester_number';
 
 @ObjectType()
 export class ValidationResponseType {

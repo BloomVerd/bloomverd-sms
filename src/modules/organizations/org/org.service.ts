@@ -13,6 +13,7 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
+import { Gender } from '../../../shared/enums';
 import {
   getDateValidationError,
   getEmailValidationError,
@@ -35,12 +36,12 @@ import {
   CreateLecturerWithRelationshipInput,
   CreateStudentInput,
   CreateStudentWithRelationshipInput,
-  PaginationInput,
 } from '../../../shared/inputs';
 import {
   ValidationFieldType,
   ValidationResponseType,
 } from '../../../shared/types';
+import { OrgProducer } from './org.producer';
 
 @Injectable()
 export class OrgService {
@@ -57,12 +58,11 @@ export class OrgService {
     private lecturerRepository: Repository<Lecturer>,
     @InjectRepository(Class)
     private classRepository: Repository<Class>,
-    @InjectRepository(Semester)
-    private semesterRepository: Repository<Semester>,
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
+    private readonly orgProducer: OrgProducer,
   ) {}
 
   /**
@@ -236,7 +236,7 @@ export class OrgService {
                 id: college.id,
                 field: 'name',
                 input: college.name,
-                message: 'College with this name already exists in database',
+                message: 'Name already taken',
               });
             }
 
@@ -256,7 +256,7 @@ export class OrgService {
                 id: college.id,
                 field: 'email',
                 input: college.email,
-                message: 'College with this email already exists in database',
+                message: 'Email already taken',
               });
             }
           }),
@@ -268,28 +268,31 @@ export class OrgService {
   }
 
   async createFaculties({
-    collegeEmail,
+    organizationEmail,
     faculties,
   }: {
-    collegeEmail: string;
-    faculties: CreateFacultyInput[];
+    organizationEmail: string;
+    faculties: CreateFacultyWithRelationshipInput[];
   }) {
     return await this.facultyRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const college = await transactionalEntityManager.findOne(College, {
-          where: {
-            email: collegeEmail,
-          },
-          relations: ['organization'],
-        });
-
-        if (!college) {
-          this.logger.error('College not found!');
-          throw new BadRequestException('College not found!');
-        }
-
         const new_faculties: Faculty[] = await Promise.all(
           faculties.map(async (faculty) => {
+            const college = await transactionalEntityManager.findOne(College, {
+              where: {
+                email: faculty.collegeEmail,
+                organization: {
+                  email: organizationEmail,
+                },
+              },
+              relations: ['organization'],
+            });
+
+            if (!college) {
+              this.logger.error('College not found!');
+              throw new BadRequestException('College not found!');
+            }
+
             const new_faculty = new Faculty();
             new_faculty.email = faculty.email;
             new_faculty.name = `${college.organization.id}-${faculty.name}`;
@@ -300,7 +303,7 @@ export class OrgService {
         );
 
         this.logger.log(
-          `Created ${new_faculties.length} faculties(s) for college: ${college.name} successfully`,
+          `Created ${new_faculties.length} faculties(s) successfully`,
         );
         return transactionalEntityManager.save(new_faculties);
       },
@@ -434,28 +437,31 @@ export class OrgService {
   }
 
   async createDepartments({
-    facultyEmail,
+    organizationEmail,
     departments,
   }: {
-    facultyEmail: string;
-    departments: CreateDepartmentInput[];
+    organizationEmail: string;
+    departments: CreateDepartmentWithRelationshipInput[];
   }) {
     return await this.departmentRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const faculty = await transactionalEntityManager.findOne(Faculty, {
-          where: {
-            email: facultyEmail,
-          },
-          relations: ['college.organization'],
-        });
-
-        if (!faculty) {
-          this.logger.error('Faculty not found!');
-          throw new BadRequestException('Faculty not found!');
-        }
-
         const new_departments: Department[] = await Promise.all(
           departments.map(async (department) => {
+            const faculty = await transactionalEntityManager.findOne(Faculty, {
+              where: {
+                email: department.facultyEmail,
+                college: {
+                  organization: { email: organizationEmail },
+                },
+              },
+              relations: ['college.organization'],
+            });
+
+            if (!faculty) {
+              this.logger.error('Faculty not found!');
+              throw new BadRequestException('Faculty not found!');
+            }
+
             const new_department = new Department();
             new_department.email = department.email;
             new_department.name = `${faculty.college.organization.id}-${department.name}`;
@@ -466,7 +472,7 @@ export class OrgService {
         );
 
         this.logger.log(
-          `Created ${new_departments.length} department(s) for faculty: ${faculty.name} successfully`,
+          `Created ${new_departments.length} department(s) successfully`,
         );
         return transactionalEntityManager.save(new_departments);
       },
@@ -607,26 +613,34 @@ export class OrgService {
     lecturers,
   }: {
     organizationEmail: string;
-    lecturers: CreateLecturerInput[];
+    lecturers: CreateLecturerWithRelationshipInput[];
   }) {
     return await this.lecturerRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const organization = await transactionalEntityManager.findOne(
-          Organization,
-          {
-            where: {
-              email: organizationEmail,
-            },
-          },
-        );
-
-        if (!organization) {
-          this.logger.error('Organiztion not found!');
-          throw new BadRequestException('Organiztion not found!');
-        }
-
         const new_lecturers: Lecturer[] = await Promise.all(
           lecturers.map(async (lecturer) => {
+            const department = await transactionalEntityManager.findOne(
+              Department,
+              {
+                where: {
+                  email: lecturer.departmentEmail,
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationEmail,
+                      },
+                    },
+                  },
+                },
+                relations: ['faculty.college.organization'],
+              },
+            );
+
+            if (!department) {
+              this.logger.error('Department not found!');
+              throw new BadRequestException('Department not found!');
+            }
+
             const new_lecturer = new Lecturer();
             new_lecturer.email = lecturer.email;
             new_lecturer.first_name = lecturer.firstName;
@@ -635,7 +649,8 @@ export class OrgService {
             new_lecturer.phone_number = lecturer.phoneNumber;
             new_lecturer.address = lecturer.address;
             new_lecturer.date_of_birth = lecturer.dateOfBirth;
-            new_lecturer.organization = organization;
+            new_lecturer.organization = department.faculty.college.organization;
+            new_lecturer.departments = [department];
 
             return new_lecturer;
           }),
@@ -645,81 +660,6 @@ export class OrgService {
           `Created ${new_lecturers.length} lecturer(s) successfully`,
         );
         return transactionalEntityManager.save(new_lecturers);
-      },
-    );
-  }
-
-  async assignLecturersToDepartment({
-    organizationEmail,
-    departmentId,
-    lecturerIds,
-  }: {
-    organizationEmail: string;
-    departmentId: string;
-    lecturerIds: string[];
-  }) {
-    return await this.lecturerRepository.manager.transaction(
-      async (transactionalEntityManager) => {
-        const department = await transactionalEntityManager.findOne(
-          Department,
-          {
-            where: {
-              id: departmentId,
-              faculty: {
-                college: {
-                  organization: {
-                    email: organizationEmail,
-                  },
-                },
-              },
-            },
-          },
-        );
-
-        if (!department) {
-          this.logger.error('Department not found!');
-          throw new BadRequestException('Department not found!');
-        }
-
-        const updated_lecturers: Lecturer[] = await Promise.all(
-          lecturerIds.map(async (lecturerId) => {
-            const lecturer = await transactionalEntityManager.findOne(
-              Lecturer,
-              {
-                where: {
-                  id: lecturerId,
-                },
-                relations: ['departments'],
-              },
-            );
-
-            if (!lecturer) {
-              this.logger.error('Lecturer not found!');
-              throw new BadRequestException('Lecturer not found!');
-            }
-
-            const isInDepartment = Boolean(
-              lecturer.departments.find((dp) => dp.id === department.id),
-            );
-            if (isInDepartment) {
-              this.logger.error(
-                `This lecturer with id ${lecturer.id} is already in this department with id ${department.id}`,
-              );
-              throw new BadRequestException(
-                'This lecturer already belong to this department',
-              );
-            }
-
-            lecturer.departments.push(department);
-
-            return lecturer;
-          }),
-        );
-
-        this.logger.log(
-          `${updated_lecturers.length} lecturer(s) updated successfully`,
-        );
-        return transactionalEntityManager.save(updated_lecturers);
       },
     );
   }
@@ -827,7 +767,7 @@ export class OrgService {
             // ✅ Validate gender enum
             const genderError = validateEnum(
               lecturer.gender,
-              ['Male', 'Female', 'Other'],
+              [Gender.MALE, Gender.FEMALE],
               'Gender',
             );
             if (genderError) {
@@ -922,41 +862,39 @@ export class OrgService {
     );
   }
 
-  async createDepartmentClasses({
+  async createClasses({
     organizationEmail,
-    departmentId,
     classes,
   }: {
     organizationEmail: string;
-    departmentId: string;
-    classes: CreateClassInput[];
+    classes: CreateClassWithRelationshipInput[];
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const department = await transactionalEntityManager.findOne(
-          Department,
-          {
-            where: {
-              id: departmentId,
-              faculty: {
-                college: {
-                  organization: {
-                    email: organizationEmail,
-                  },
-                },
-              },
-            },
-            relations: ['faculty.college.organization'],
-          },
-        );
-
-        if (!department) {
-          this.logger.error('Department not found!');
-          throw new BadRequestException('Department not found!');
-        }
-
         const new_classes: Class[] = await Promise.all(
           classes.map(async (dep_class) => {
+            const department = await transactionalEntityManager.findOne(
+              Department,
+              {
+                where: {
+                  email: dep_class.departmentEmail,
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationEmail,
+                      },
+                    },
+                  },
+                },
+                relations: ['faculty.college.organization'],
+              },
+            );
+
+            if (!department) {
+              this.logger.error('Department not found!');
+              throw new BadRequestException('Department not found!');
+            }
+
             const new_class = new Class();
             new_class.name = `${department.faculty.college.organization.id}-${dep_class.name}`;
             new_class.department = department;
@@ -966,10 +904,34 @@ export class OrgService {
         );
 
         this.logger.log(
-          `Created ${new_classes.length} department class(es) for department: ${department.name} successfully`,
+          `Created ${new_classes.length} department class(es) successfully`,
         );
 
-        return transactionalEntityManager.save(new_classes);
+        await transactionalEntityManager.save(new_classes);
+
+        new_classes.forEach(async (new_class) => {
+          const semesters = [];
+          const numOfSemesters =
+            classes.find((cls) => new_class.name.includes(cls.name))
+              ?.numberOfSemesters || 0;
+
+          for (let i = 1; i < numOfSemesters + 1; i++) {
+            semesters.push(i);
+          }
+
+          const new_semesters: Semester[] = await Promise.all(
+            semesters.map(async (sem_num) => {
+              const new_semester = new Semester();
+              new_semester.semester_number = sem_num;
+              new_semester.class = new_class;
+              return new_semester;
+            }),
+          );
+
+          await transactionalEntityManager.save(new_semesters);
+        });
+
+        return new_classes;
       },
     );
   }
@@ -1066,94 +1028,51 @@ export class OrgService {
     );
   }
 
-  async createClassSemesters({
+  async createStudents({
     organizationEmail,
-    classId,
-    numOfSemesters = 8,
-  }: {
-    organizationEmail: string;
-    classId: string;
-    numOfSemesters?: number;
-  }) {
-    return await this.semesterRepository.manager.transaction(
-      async (transactionalEntityManager) => {
-        const dep_class = await transactionalEntityManager.findOne(Class, {
-          where: {
-            id: classId,
-            department: {
-              faculty: {
-                college: {
-                  organization: {
-                    email: organizationEmail,
-                  },
-                },
-              },
-            },
-          },
-        });
-
-        if (!dep_class) {
-          this.logger.error('Class not found!');
-          throw new BadRequestException('Class not found!');
-        }
-
-        const semesters = [];
-
-        for (let i = 1; i < numOfSemesters + 1; i++) {
-          semesters.push(i);
-        }
-
-        const new_semesters: Semester[] = await Promise.all(
-          semesters.map(async (sem_num) => {
-            const new_semester = new Semester();
-            new_semester.semester_number = sem_num;
-            new_semester.class = dep_class;
-            return new_semester;
-          }),
-        );
-
-        this.logger.log(
-          `Created ${new_semesters.length} semester(s) for class: ${dep_class.name} successfully`,
-        );
-
-        return transactionalEntityManager.save(new_semesters);
-      },
-    );
-  }
-
-  async createClassStudents({
-    organizationEmail,
-    classId,
     students,
   }: {
     organizationEmail: string;
-    classId: string;
-    students: CreateStudentInput[];
+    students: CreateStudentWithRelationshipInput[];
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const dep_class = await transactionalEntityManager.findOne(Class, {
-          where: {
-            id: classId,
-            department: {
-              faculty: {
-                college: {
-                  organization: {
-                    email: organizationEmail,
+        const new_students: Student[] = await Promise.all(
+          students.map(async (student) => {
+            const organization = await transactionalEntityManager.findOne(
+              Organization,
+              {
+                where: {
+                  email: organizationEmail,
+                },
+              },
+            );
+
+            if (!organization) {
+              this.logger.error('Organization not found!');
+              throw new BadRequestException('Organization not found!');
+            }
+
+            const dep_class = await transactionalEntityManager.findOne(Class, {
+              where: {
+                name: `${organization.id}-${student.className}`,
+                department: {
+                  faculty: {
+                    college: {
+                      organization: {
+                        email: organizationEmail,
+                      },
+                    },
                   },
                 },
               },
-            },
-          },
-        });
+            });
 
-        if (!dep_class) {
-          this.logger.error('Class not found!');
-          throw new BadRequestException('Class not found!');
-        }
+            if (!dep_class) {
+              this.logger.error('Class not found!');
+              throw new BadRequestException('Class not found!');
+            }
 
-        const new_students: Student[] = await Promise.all(
-          students.map(async (student) => {
             const new_student = new Student();
             new_student.first_name = student.firstName;
             new_student.last_name = student.lastName;
@@ -1170,7 +1089,7 @@ export class OrgService {
         );
 
         this.logger.log(
-          `Created ${new_students.length} student(s) for department: ${dep_class.name} successfully`,
+          `Created ${new_students.length} student(s) successfully`,
         );
 
         return transactionalEntityManager.save(new_students);
@@ -1281,7 +1200,7 @@ export class OrgService {
             // ✅ Validate gender enum
             const genderError = validateEnum(
               student.gender,
-              ['Male', 'Female', 'Other'],
+              [Gender.MALE, Gender.FEMALE],
               'Gender',
             );
             if (genderError) {
@@ -1376,46 +1295,62 @@ export class OrgService {
     );
   }
 
-  async createSemesterCourses({
-    organizationalEmail,
-    semesterCourses,
-    semesterId,
+  async createCourses({
+    organizationEmail,
+    courses,
   }: {
-    organizationalEmail: string;
-    semesterCourses: CreateCourseInput[];
-    semesterId: string;
+    organizationEmail: string;
+    courses: CreateCourseWithRelationshipInput[];
   }) {
     return await this.classRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const semester = await transactionalEntityManager.findOne(Semester, {
-          where: {
-            id: semesterId,
-            class: {
-              department: {
-                faculty: {
-                  college: {
-                    organization: {
-                      email: organizationalEmail,
+        const new_semester_courses: Course[] = await Promise.all(
+          courses.map(async (course) => {
+            const organization = await transactionalEntityManager.findOne(
+              Organization,
+              {
+                where: {
+                  email: organizationEmail,
+                },
+              },
+            );
+
+            if (!organization) {
+              this.logger.error('Organization not found!');
+              throw new BadRequestException('Organization not found!');
+            }
+
+            const semester = await transactionalEntityManager.findOne(
+              Semester,
+              {
+                where: {
+                  semester_number: course.semesterNumber,
+                  class: {
+                    name: `${organization.id}-${course.className}`,
+                    department: {
+                      faculty: {
+                        college: {
+                          organization: {
+                            email: organizationEmail,
+                          },
+                        },
+                      },
                     },
                   },
                 },
+                relations: ['class.department.faculty.college.organization'],
               },
-            },
-          },
-          relations: ['class.department.faculty.college.organization'],
-        });
+            );
 
-        if (!semester) {
-          this.logger.error('Semester not found!');
-          throw new BadRequestException('semester not found!');
-        }
+            if (!semester) {
+              this.logger.error('Semester not found!');
+              throw new BadRequestException('semester not found!');
+            }
 
-        const new_semester_courses: Course[] = await Promise.all(
-          semesterCourses.map(async (semesterCourse) => {
             const new_semester_course = new Course();
-            new_semester_course.course_code = `${semester.class.department.faculty.college.organization.id}-${semesterCourse.code}`;
-            new_semester_course.name = semesterCourse.name;
-            new_semester_course.credits = semesterCourse.credits;
+            new_semester_course.course_code = `${semester.class.department.faculty.college.organization.id}-${course.code}`;
+            new_semester_course.name = course.name;
+            new_semester_course.credits = course.credits;
             new_semester_course.semesters = [semester];
 
             return new_semester_course;
@@ -1423,7 +1358,7 @@ export class OrgService {
         );
 
         this.logger.log(
-          `Created ${new_semester_courses.length} course(s) for semester: ${semester.id} successfully`,
+          `Created ${new_semester_courses.length} course(s) successfully`,
         );
 
         return transactionalEntityManager.save(new_semester_courses);
@@ -1697,80 +1632,87 @@ export class OrgService {
       if (errors.length) throw new BadRequestException(errors);
     }
 
+    await this.orgProducer.setupAction({
+      organizationEmail,
+      colleges,
+      faculties,
+      departments,
+      lecturers,
+      classes,
+      students,
+      courses,
+    });
+
     return {
       message:
         'An in-app notification or email will be sent to you after everything is done setting up',
     };
   }
 
-  private paginate<T>(
-    items: T[],
-    paginationInput: PaginationInput = {},
-    cursorExtractor: (item: T) => string | number,
-  ) {
-    const { first, after, last, before } = paginationInput;
+  async setupActionProcessing({
+    organizationEmail,
+    colleges,
+    faculties,
+    departments,
+    lecturers,
+    classes,
+    students,
+    courses,
+  }: {
+    organizationEmail: string;
+    colleges: CreateCollegeInput[];
+    faculties: CreateFacultyWithRelationshipInput[];
+    departments: CreateDepartmentWithRelationshipInput[];
+    lecturers: CreateLecturerWithRelationshipInput[];
+    classes: CreateClassWithRelationshipInput[];
+    students: CreateStudentWithRelationshipInput[];
+    courses: CreateCourseWithRelationshipInput[];
+  }) {
+    return await this.courseRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const created_colleges = await this.createColleges({
+          organizationEmail,
+          colleges,
+        });
 
-    const defaultFirst = 10;
-    let limit = first || defaultFirst;
-    let afterIndex = -1;
-    let beforeIndex = items.length;
+        const created_faculties = await this.createFaculties({
+          organizationEmail,
+          faculties,
+        });
 
-    if (after) {
-      const decodedCursor = this.decodeCursor(after);
-      afterIndex = items.findIndex(
-        (item) => String(cursorExtractor(item)) === decodedCursor,
-      );
-      if (afterIndex === -1) afterIndex = -1;
-      else afterIndex = afterIndex;
-    }
+        const created_departments = await this.createDepartments({
+          organizationEmail,
+          departments,
+        });
 
-    if (before) {
-      const decodedCursor = this.decodeCursor(before);
-      beforeIndex = items.findIndex(
-        (item) => String(cursorExtractor(item)) === decodedCursor,
-      );
-      if (beforeIndex === -1) beforeIndex = items.length;
-      else beforeIndex = beforeIndex;
-    }
+        const created_lecturers = await this.createLecturers({
+          organizationEmail,
+          lecturers,
+        });
 
-    if (last) {
-      const potentialCount = beforeIndex - afterIndex - 1;
-      if (potentialCount > last) {
-        afterIndex = beforeIndex - last - 1;
-      }
-      limit = last;
-    }
+        const created_classes = await this.createClasses({
+          organizationEmail,
+          classes,
+        });
 
-    const slicedItems = items.slice(afterIndex + 1, beforeIndex);
-    const paginatedItems = slicedItems.slice(0, limit);
+        const created_students = await this.createStudents({
+          organizationEmail,
+          students,
+        });
 
-    const edges = paginatedItems.map((item) => ({
-      cursor: this.encodeCursor(String(cursorExtractor(item))),
-      node: item,
-    }));
+        const created_courses = await this.createCourses({
+          organizationEmail,
+          courses,
+        });
 
-    const hasNextPage = beforeIndex > afterIndex + 1 + paginatedItems.length;
-    const hasPreviousPage = afterIndex >= 0;
-
-    const pageInfo = {
-      hasNextPage,
-      hasPreviousPage,
-      startCursor: edges.length > 0 ? edges[0].cursor : null,
-      endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
-    };
-
-    return {
-      edges,
-      pageInfo,
-      count: items.length,
-    };
-  }
-
-  private encodeCursor(cursor: string): string {
-    return Buffer.from(cursor).toString('base64');
-  }
-
-  private decodeCursor(cursor: string): string {
-    return Buffer.from(cursor, 'base64').toString('utf-8');
+        await transactionalEntityManager.save(created_colleges);
+        await transactionalEntityManager.save(created_faculties);
+        await transactionalEntityManager.save(created_departments);
+        await transactionalEntityManager.save(created_lecturers);
+        await transactionalEntityManager.save(created_classes);
+        await transactionalEntityManager.save(created_students);
+        await transactionalEntityManager.save(created_courses);
+      },
+    );
   }
 }

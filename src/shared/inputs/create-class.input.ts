@@ -7,4 +7,7 @@ export class CreateClassInput {
 
   @Field()
   name: string;
+
+  @Field()
+  numberOfSemesters: number;
 }

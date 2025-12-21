@@ -1,5 +1,14 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
-import { Gender } from 'src/shared/enums';
+import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+
+export enum Gender {
+  MALE = 'MALE',
+  FEMALE = 'FEMALE',
+}
+
+registerEnumType(Gender, {
+  name: 'Gender',
+  description: 'Gender of entity',
+});
 
 @ObjectType('Student')
 export class StudentTypeClass {

@@ -3,6 +3,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
 import { Connection, Repository } from 'typeorm';
+import { Queue } from 'bullmq';
+import { getQueueToken } from '@nestjs/bullmq';
 import {
   Class,
   College,
@@ -13,16 +15,20 @@ import {
   Faculty,
   Lecturer,
   Organization,
-  Semester,
   Student,
 } from '../../../database/entities';
 import { Gender } from '../../../shared/enums';
 import { HashHelper } from '../../../shared/helpers';
 import { OrgService } from './org.service';
+import { OrgProducer } from './org.producer';
+import { OrgConsumer } from './org.consumer';
+import { BullModule } from '@nestjs/bullmq';
 
 describe('OrganizationService', () => {
   let module: TestingModule;
   let connection: Connection;
+  let organizationQueue: Queue;
+  let orgConsumer: OrgConsumer;
 
   let orgService: OrgService;
   let orgRepository: Repository<Organization>;
@@ -31,7 +37,6 @@ describe('OrganizationService', () => {
   let departmentRepository: Repository<Department>;
   let lecturerRepository: Repository<Lecturer>;
   let classRepository: Repository<Class>;
-  let semesterRepository: Repository<Semester>;
   let studentRepository: Repository<Student>;
   let courseRepository: Repository<Course>;
   let courseMaterialRepository: Repository<CourseMaterial>;
@@ -42,6 +47,9 @@ describe('OrganizationService', () => {
         ConfigModule.forRoot({
           isGlobal: true,
           envFilePath: '.env.test.local',
+        }),
+        BullModule.registerQueue({
+          name: 'organization-queue',
         }),
         JwtModule.registerAsync({
           imports: [ConfigModule],
@@ -65,11 +73,13 @@ describe('OrganizationService', () => {
         TypeOrmModule.forFeature(entities),
       ],
       controllers: [],
-      providers: [OrgService],
+      providers: [OrgService, OrgProducer, OrgConsumer],
     }).compile();
 
     connection = module.get<Connection>(Connection);
+    organizationQueue = module.get<Queue>(getQueueToken('organization-queue'));
     orgService = module.get<OrgService>(OrgService);
+    orgConsumer = module.get<OrgConsumer>(OrgConsumer);
     orgRepository = module.get<Repository<Organization>>(
       getRepositoryToken(Organization),
     );
@@ -86,9 +96,6 @@ describe('OrganizationService', () => {
       getRepositoryToken(Lecturer),
     );
     classRepository = module.get<Repository<Class>>(getRepositoryToken(Class));
-    semesterRepository = module.get<Repository<Semester>>(
-      getRepositoryToken(Semester),
-    );
     studentRepository = module.get<Repository<Student>>(
       getRepositoryToken(Student),
     );
@@ -107,6 +114,13 @@ describe('OrganizationService', () => {
       const repository = connection.getRepository(entity.name);
       await repository.query(`TRUNCATE "${entity.tableName}" CASCADE;`);
     }
+    // Clear the queue
+    await organizationQueue.clean(0, 3, 'active');
+    await organizationQueue.clean(0, 3, 'completed');
+    await organizationQueue.clean(0, 3, 'failed');
+    await organizationQueue.clean(0, 3, 'delayed');
+    await organizationQueue.clean(0, 3, 'wait');
+
     jest.restoreAllMocks();
   });
 
@@ -143,11 +157,16 @@ describe('OrganizationService', () => {
       });
 
       const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: facultyData,
+        organizationEmail: organization.email,
+        faculties: facultyData.map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      const college_faculties = await getCollegeFaculties(colleges[0].email);
+      const college_faculties = await getCollegeFaculties(
+        collegesData[0].email,
+      );
 
       expect(faculties.length).toEqual(college_faculties.length);
       expect(faculties.pop()?.college.id).toBe(colleges[0].id);
@@ -158,23 +177,29 @@ describe('OrganizationService', () => {
     it('Create bulk departments linked to a faculty', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
       const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
       const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: departmentData,
+        organizationEmail: organization.email,
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
       const faculty_departments = await getFacultyDepartments(
-        faculties[0].email,
+        facultyData[0].email,
       );
 
       expect(departments.length).toEqual(faculty_departments.length);
@@ -186,9 +211,33 @@ describe('OrganizationService', () => {
     it('Create bulk lecturers linked to a organization', async () => {
       const { organization } = await setupData();
 
+      await orgService.createColleges({
+        organizationEmail: organization.email,
+        colleges: [collegesData[0]],
+      });
+
+      await orgService.createFaculties({
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
+      });
+
+      await orgService.createDepartments({
+        organizationEmail: organization.email,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
+      });
+
       const lecturers = await orgService.createLecturers({
         organizationEmail: organization.email,
-        lecturers: lecturerData,
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
       const organization_lecturers = await getOrganizationLecturers(
@@ -200,196 +249,147 @@ describe('OrganizationService', () => {
     });
   });
 
-  describe('assignLecturersToDepartment', () => {
-    it('Assign bulk lecturers to a department', async () => {
-      const { organization } = await setupData();
-
-      const colleges = await orgService.createColleges({
-        organizationEmail: organization.email,
-        colleges: [collegesData[0]],
-      });
-
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const lecturers = await orgService.createLecturers({
-        organizationEmail: organization.email,
-        lecturers: lecturerData,
-      });
-
-      const updated_lecturers = await orgService.assignLecturersToDepartment({
-        organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        lecturerIds: lecturers.map((lecturer) => lecturer.id),
-      });
-
-      const response = await getOrganizationLecturers(organization.email);
-
-      expect(updated_lecturers.length).toEqual(response.length);
-      expect(response[0]?.departments[0].id).toBe(departments[0].id);
-      expect(response[1]?.departments[0].id).toBe(departments[0].id);
-    });
-  });
-
-  describe('createDepartmentClasses', () => {
+  describe('createClasses', () => {
     it('Create bulk classes to a department', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
+      await orgService.createFaculties({
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
       const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: classData,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
-      const dep_classes = await getDepartmentClasses(departments[0].email);
+      const classes = await orgService.createClasses({
+        organizationEmail: organization.email,
+        classes: classData.map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
+      });
+
+      const dep_classes = await getDepartmentClasses(departmentData[0].email);
 
       expect(dep_classes.length).toEqual(classes.length);
       expect(dep_classes[0].department.id).toBe(departments[0].id);
+      expect(dep_classes[0].semesters.length).toEqual(8);
     });
   });
 
-  describe('createClassSemesters', () => {
-    it('Create bulk semesters for a class', async () => {
-      const { organization } = await setupData();
-
-      const colleges = await orgService.createColleges({
-        organizationEmail: organization.email,
-        colleges: [collegesData[0]],
-      });
-
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
-        organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
-      });
-
-      const semesters = await orgService.createClassSemesters({
-        organizationEmail: organization.email,
-        classId: classes[0].id,
-      });
-
-      const class_semesters = await getClassSemesters(classes[0].id);
-
-      expect(class_semesters.length).toEqual(semesters.length);
-      expect(class_semesters[0].class.id).toBe(classes[0].id);
-    });
-  });
-
-  describe('createClassStudents', () => {
+  describe('createStudents', () => {
     it('Create bulk students for a class', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
+      await orgService.createFaculties({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      await orgService.createClassSemesters({
+      await orgService.createDepartments({
         organizationEmail: organization.email,
-        classId: classes[0].id,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
-      const students = await orgService.createClassStudents({
+      const classes = await orgService.createClasses({
         organizationEmail: organization.email,
-        classId: classes[0].id,
-        students: studentData,
+        classes: [classData[0]].map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
-      const class_students = await getClassStudents(classes[0].id);
+      const students = await orgService.createStudents({
+        organizationEmail: organization.email,
+        students: studentData.map((std) => ({
+          ...std,
+          className: classData[0].name,
+        })),
+      });
+
+      const class_students = await getClassStudents(
+        `${organization.id}-${classData[0].name}`,
+      );
 
       expect(class_students.length).toEqual(students.length);
       expect(class_students[0].class.id).toBe(classes[0].id);
     });
   });
 
-  describe('createSemesterCourses', () => {
+  describe('createCourses', () => {
     it('Create bulk courses for a semester', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
+      await orgService.createFaculties({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      const semesters = await orgService.createClassSemesters({
+      await orgService.createDepartments({
         organizationEmail: organization.email,
-        classId: classes[0].id,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
-      const courses = await orgService.createSemesterCourses({
-        organizationalEmail: organization.email,
-        semesterId: semesters[0].id,
-        semesterCourses: [coursesData[0]],
+      await orgService.createClasses({
+        organizationEmail: organization.email,
+        classes: [classData[0]].map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
-      const semester_courses = await getSemesterCourses(semesters[0].id);
+      const courses = await orgService.createCourses({
+        organizationEmail: organization.email,
+        courses: coursesData.map((course) => ({
+          ...course,
+          className: classData[0].name,
+        })),
+      });
+
+      const semester_courses = await getSemesterCourses(
+        `${organization.id}-${classData[0].name}`,
+        1,
+      );
 
       expect(semester_courses.length).toEqual(courses.length);
-      expect(semester_courses[0].semesters[0].id).toBe(semesters[0].id);
+      expect(semester_courses[0].semesters[0].id).toBe(
+        courses[0].semesters.find((sem) => sem.semester_number === 1)?.id,
+      );
     });
   });
 
@@ -397,36 +397,41 @@ describe('OrganizationService', () => {
     it('Upload course material for a course', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
+      await orgService.createFaculties({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      const semesters = await orgService.createClassSemesters({
+      await orgService.createDepartments({
         organizationEmail: organization.email,
-        classId: classes[0].id,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
-      const courses = await orgService.createSemesterCourses({
-        organizationalEmail: organization.email,
-        semesterId: semesters[0].id,
-        semesterCourses: [coursesData[0]],
+      await orgService.createClasses({
+        organizationEmail: organization.email,
+        classes: [classData[0]].map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
+      });
+
+      const courses = await orgService.createCourses({
+        organizationEmail: organization.email,
+        courses: coursesData.map((course) => ({
+          ...course,
+          className: classData[0].name,
+        })),
       });
 
       const materials = await orgService.uploadCourseMaterial({
@@ -489,14 +494,17 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if faculty already exist by name and email', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
       await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: facultyData,
+        organizationEmail: organization.email,
+        faculties: facultyData.map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
       const validation_response = await orgService.validateFacultyData({
@@ -526,19 +534,25 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if department already exist by name and email', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
+      await orgService.createFaculties({
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
       await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: departmentData,
+        organizationEmail: organization.email,
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
       const validation_response = await orgService.validateDepartmentData({
@@ -571,25 +585,33 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if class already exist by name', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      await orgService.createDepartmentClasses({
+      await orgService.createFaculties({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: classData,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
+      });
+
+      await orgService.createDepartments({
+        organizationEmail: organization.email,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
+      });
+
+      await orgService.createClasses({
+        organizationEmail: organization.email,
+        classes: classData.map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
       const validation_response = await orgService.validateClassData({
@@ -622,36 +644,41 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if course already exist by code', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
-      });
-
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
-      });
-
-      const classes = await orgService.createDepartmentClasses({
+      await orgService.createFaculties({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      const semesters = await orgService.createClassSemesters({
+      await orgService.createDepartments({
         organizationEmail: organization.email,
-        classId: classes[0].id,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
-      await orgService.createSemesterCourses({
-        organizationalEmail: organization.email,
-        semesterId: semesters[0].id,
-        semesterCourses: coursesData,
+      await orgService.createClasses({
+        organizationEmail: organization.email,
+        classes: [classData[0]].map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
+      });
+
+      await orgService.createCourses({
+        organizationEmail: organization.email,
+        courses: coursesData.map((course) => ({
+          ...course,
+          className: classData[0].name,
+        })),
       });
 
       const validation_response = await orgService.validateCourseData({
@@ -684,24 +711,33 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if lecturer already exist by email and phone_number', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
+      await orgService.createFaculties({
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
       await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
+        organizationEmail: organization.email,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
       await orgService.createLecturers({
         organizationEmail: organization.email,
-        lecturers: lecturerData,
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
       const validation_response = await orgService.validateLecturerData({
@@ -731,36 +767,49 @@ describe('OrganizationService', () => {
     it('returns an array of validation-response error if student already exist by email and phone_number', async () => {
       const { organization } = await setupData();
 
-      const colleges = await orgService.createColleges({
+      await orgService.createColleges({
         organizationEmail: organization.email,
         colleges: [collegesData[0]],
       });
 
-      const faculties = await orgService.createFaculties({
-        collegeEmail: colleges[0].email,
-        faculties: [facultyData[0]],
+      await orgService.createFaculties({
+        organizationEmail: organization.email,
+        faculties: [facultyData[0]].map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
       });
 
-      const departments = await orgService.createDepartments({
-        facultyEmail: faculties[0].email,
-        departments: [departmentData[0]],
+      await orgService.createDepartments({
+        organizationEmail: organization.email,
+        departments: [departmentData[0]].map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
       });
 
       await orgService.createLecturers({
         organizationEmail: organization.email,
-        lecturers: lecturerData,
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
-      const classes = await orgService.createDepartmentClasses({
+      await orgService.createClasses({
         organizationEmail: organization.email,
-        departmentId: departments[0].id,
-        classes: [classData[0]],
+        classes: [classData[0]].map((cld) => ({
+          ...cld,
+          departmentEmail: departmentData[0].email,
+        })),
       });
 
-      await orgService.createClassStudents({
+      await orgService.createStudents({
         organizationEmail: organization.email,
-        classId: classes[0].id,
-        students: studentData,
+        students: studentData.map((std) => ({
+          ...std,
+          className: classData[0].name,
+        })),
       });
 
       const validation_response = await orgService.validateStudentData({
@@ -769,6 +818,127 @@ describe('OrganizationService', () => {
       });
 
       expect(validation_response.length).toEqual(4);
+    });
+  });
+
+  describe('setupActionProcessing', () => {
+    it('runs successfully if there are no issues', async () => {
+      const { organization } = await setupData();
+      await orgService.setupActionProcessing({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+        faculties: facultyData.map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: departmentData[0].email,
+        })),
+        classes: classData.map((cls) => ({
+          ...cls,
+          departmentEmail: departmentData[0].email,
+        })),
+        students: studentData.map((student) => ({
+          ...student,
+          className: classData[0].name,
+        })),
+        courses: coursesData.map((course) => ({
+          ...course,
+          className: classData[0].name,
+        })),
+      });
+
+      const colleges = await getOrganizationColleges(organization.email);
+      const faculties = await getCollegeFaculties(collegesData[0].email);
+      const departments = await getFacultyDepartments(facultyData[0].email);
+      const lecturers = await getDepartmentLecturers(departmentData[0].email);
+      const classes = await getDepartmentClasses(departmentData[0].email);
+      const students = await getClassStudents(
+        `${organization.id}-${classData[0].name}`,
+      );
+      const courses = await getSemesterCourses(
+        `${organization.id}-${classData[0].name}`,
+        1,
+      );
+
+      expect(colleges[0].organization.id).toEqual(organization.id);
+      expect(faculties[0].college.id).toEqual(colleges[0].id);
+      expect(departments[0].faculty.id).toEqual(faculties[0].id);
+      expect(lecturers[0].departments[0].id).toEqual(departments[0].id);
+      expect(classes[0].department.id).toEqual(departments[0].id);
+      expect(classes[0].semesters.length).toEqual(
+        classData[0].numberOfSemesters,
+      );
+      expect(students[0].class.id).toEqual(classes[0].id);
+      expect(courses[0].semesters[0].class.id).toEqual(classes[0].id);
+    });
+  });
+
+  describe('setupAction', () => {
+    it('puts data in queue for processing after validation, processes jobs, and verifies', async () => {
+      const { organization } = await setupData();
+
+      await orgService.setupAction({
+        organizationEmail: organization.email,
+        colleges: collegesData,
+        faculties: facultyData.map((faculty) => ({
+          ...faculty,
+          collegeEmail: collegesData[0].email,
+        })),
+        departments: departmentData.map((department) => ({
+          ...department,
+          facultyEmail: facultyData[0].email,
+        })),
+        lecturers: lecturerData.map((lecturer) => ({
+          ...lecturer,
+          departmentEmail: departmentData[0].email,
+        })),
+        classes: classData.map((cls) => ({
+          ...cls,
+          departmentEmail: departmentData[0].email,
+        })),
+        students: studentData.map((student) => ({
+          ...student,
+          className: classData[0].name,
+        })),
+        courses: coursesData.map((course) => ({
+          ...course,
+          className: classData[0].name,
+        })),
+      });
+
+      // Process all jobs in the queue and wait for completion
+      await processQueueJobs();
+
+      // Verify data was processed successfully
+      const colleges = await getOrganizationColleges(organization.email);
+      const faculties = await getCollegeFaculties(collegesData[0].email);
+      const departments = await getFacultyDepartments(facultyData[0].email);
+      const lecturers = await getDepartmentLecturers(departmentData[0].email);
+      const classes = await getDepartmentClasses(departmentData[0].email);
+      const students = await getClassStudents(
+        `${organization.id}-${classData[0].name}`,
+      );
+      const courses = await getSemesterCourses(
+        `${organization.id}-${classData[0].name}`,
+        1,
+      );
+
+      expect(colleges[0].organization.id).toEqual(organization.id);
+      expect(faculties[0].college.id).toEqual(colleges[0].id);
+      expect(departments[0].faculty.id).toEqual(faculties[0].id);
+      expect(lecturers[0].departments[0].id).toEqual(departments[0].id);
+      expect(classes[0].department.id).toEqual(departments[0].id);
+      expect(classes[0].semesters.length).toEqual(
+        classData[0].numberOfSemesters,
+      );
+      expect(students[0].class.id).toEqual(classes[0].id);
+      expect(courses[0].semesters[0].class.id).toEqual(classes[0].id);
     });
   });
 
@@ -819,7 +989,7 @@ describe('OrganizationService', () => {
       firstName: 'Lecturer',
       lastName: 'One',
       gender: Gender.MALE,
-      phoneNumber: '0550815604',
+      phoneNumber: '+233550815604',
       address: 'address',
       dateOfBirth: new Date(),
     },
@@ -829,7 +999,7 @@ describe('OrganizationService', () => {
       firstName: 'Lecturer',
       lastName: 'Two',
       gender: Gender.MALE,
-      phoneNumber: '0550815605',
+      phoneNumber: '+233550815605',
       address: 'address',
       dateOfBirth: new Date(),
     },
@@ -838,10 +1008,12 @@ describe('OrganizationService', () => {
   const classData = [
     {
       id: '1',
+      numberOfSemesters: 8,
       name: 'biomed class 2025',
     },
     {
       id: '2',
+      numberOfSemesters: 8,
       name: 'biomed class 2026',
     },
   ];
@@ -853,7 +1025,7 @@ describe('OrganizationService', () => {
       firstName: 'Student',
       lastName: 'One',
       gender: Gender.MALE,
-      phoneNumber: '0550815604',
+      phoneNumber: '+233550815604',
       address: 'address',
       dateOfBirth: new Date(),
     },
@@ -863,7 +1035,7 @@ describe('OrganizationService', () => {
       firstName: 'Student',
       lastName: 'Two',
       gender: Gender.MALE,
-      phoneNumber: '0550815605',
+      phoneNumber: '+233550815605',
       address: 'address',
       dateOfBirth: new Date(),
     },
@@ -875,12 +1047,14 @@ describe('OrganizationService', () => {
       name: 'Introduction to Biology',
       code: 'EL291',
       credits: 3,
+      semesterNumber: 1,
     },
     {
       id: '2',
       name: 'Chemical Compounds',
       code: 'CW291',
       credits: 4,
+      semesterNumber: 1,
     },
   ];
 
@@ -937,28 +1111,31 @@ describe('OrganizationService', () => {
   const getDepartmentClasses = async (email: string) => {
     return classRepository.find({
       where: { department: { email } },
-      relations: ['department'],
+      relations: ['department', 'semesters'],
     });
   };
 
-  const getClassSemesters = async (id: string) => {
-    return semesterRepository.find({
-      where: { class: { id } },
-      relations: ['class'],
+  const getDepartmentLecturers = async (email: string) => {
+    return lecturerRepository.find({
+      where: { departments: { email } },
+      relations: ['departments'],
     });
   };
 
-  const getClassStudents = async (id: string) => {
+  const getClassStudents = async (class_name: string) => {
     return studentRepository.find({
-      where: { class: { id } },
+      where: { class: { name: class_name } },
       relations: ['class'],
     });
   };
 
-  const getSemesterCourses = async (id: string) => {
+  const getSemesterCourses = async (
+    class_name: string,
+    semester_number: number,
+  ) => {
     return courseRepository.find({
-      where: { semesters: { id } },
-      relations: ['semesters'],
+      where: { semesters: { semester_number, class: { name: class_name } } },
+      relations: ['semesters.class'],
     });
   };
 
@@ -967,5 +1144,27 @@ describe('OrganizationService', () => {
       where: { course: { id } },
       relations: ['course'],
     });
+  };
+
+  // Helper function to process queue jobs and wait for completion
+  const processQueueJobs = async (): Promise<void> => {
+    // Get all waiting jobs
+    const jobs = await organizationQueue.getWaiting(0, -1);
+
+    // If there are jobs, process them
+    if (jobs.length > 0) {
+      for (const job of jobs) {
+        try {
+          // Manually call the consumer's process method
+          await orgConsumer.process(job);
+          // Mark job as completed
+          // await job.moveToCompleted('', '');
+        } catch (error) {
+          // Mark job as failed
+          console.log('MARKED_ERROR:', error);
+          // await job.moveToFailed(error, '');
+        }
+      }
+    }
   };
 });

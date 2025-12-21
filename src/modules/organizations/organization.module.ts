@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -8,10 +9,15 @@ import { AuthResolver } from './auth/auth.resolver';
 import { AuthService } from './auth/auth.service';
 import { OrgResolver } from './org/org.resolver';
 import { OrgService } from './org/org.service';
+import { OrgProducer } from './org/org.producer';
+import { OrgConsumer } from './org/org.consumer';
 
 @Module({
   imports: [
     ConfigModule,
+    BullModule.registerQueue({
+      name: 'organization-queue',
+    }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -25,6 +31,14 @@ import { OrgService } from './org/org.service';
     TypeOrmModule.forFeature(entities),
   ],
   controllers: [],
-  providers: [AuthResolver, JwtStrategy, AuthService, OrgResolver, OrgService],
+  providers: [
+    AuthResolver,
+    JwtStrategy,
+    AuthService,
+    OrgResolver,
+    OrgService,
+    OrgProducer,
+    OrgConsumer,
+  ],
 })
 export class OrganizationModule {}
