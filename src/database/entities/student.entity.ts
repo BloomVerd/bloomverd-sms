@@ -34,6 +34,12 @@ export class Student {
   @Column({ nullable: true })
   password: string;
 
+  @Column({ default: null })
+  reset_token: string;
+
+  @Column({ default: null })
+  reset_token_expires_at: Date;
+
   @ManyToOne(() => Class, (cls) => cls.students)
   class: Class;
 }

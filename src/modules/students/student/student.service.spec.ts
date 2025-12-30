@@ -1,42 +1,25 @@
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
-import { Connection, Repository } from 'typeorm';
 import { Queue } from 'bullmq';
-import { getQueueToken } from '@nestjs/bullmq';
-import {
-  Class,
-  College,
-  Course,
-  CourseMaterial,
-  Department,
-  entities,
-  Faculty,
-  Lecturer,
-  Organization,
-  Student,
-} from '../../../database/entities';
+import { Connection, Repository } from 'typeorm';
+import { entities, Student } from '../../../database/entities';
 import { Gender } from '../../../shared/enums';
 import { HashHelper } from '../../../shared/helpers';
-import { BullModule } from '@nestjs/bullmq';
-import { OrgConsumer } from 'src/modules/organizations/org/org.consumer';
+import { AuthProducer } from '../auth/auth.producer';
+import { StudentService } from './student.service';
 
-describe('OrganizationService', () => {
+describe('StudentService', () => {
   let module: TestingModule;
   let connection: Connection;
-  let organizationQueue: Queue;
+  let studentQueue: Queue;
 
-  let orgService: OrgService;
-  let orgRepository: Repository<Organization>;
-  let collegeRepository: Repository<College>;
-  let facultyRepository: Repository<Faculty>;
-  let departmentRepository: Repository<Department>;
-  let lecturerRepository: Repository<Lecturer>;
-  let classRepository: Repository<Class>;
+  let studentService: StudentService;
+  let authProducer: AuthProducer;
   let studentRepository: Repository<Student>;
-  let courseRepository: Repository<Course>;
-  let courseMaterialRepository: Repository<CourseMaterial>;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -46,7 +29,7 @@ describe('OrganizationService', () => {
           envFilePath: '.env.test.local',
         }),
         BullModule.registerQueue({
-          name: 'organization-queue',
+          name: 'student-queue',
         }),
         JwtModule.registerAsync({
           imports: [ConfigModule],
@@ -70,37 +53,15 @@ describe('OrganizationService', () => {
         TypeOrmModule.forFeature(entities),
       ],
       controllers: [],
-      providers: [],
+      providers: [StudentService, AuthProducer],
     }).compile();
 
     connection = module.get<Connection>(Connection);
-    organizationQueue = module.get<Queue>(getQueueToken('organization-queue'));
-    // orgService = module.get<OrgService>(OrgService);
-    // orgConsumer = module.get<OrgConsumer>(OrgConsumer);
-    orgRepository = module.get<Repository<Organization>>(
-      getRepositoryToken(Organization),
-    );
-    collegeRepository = module.get<Repository<College>>(
-      getRepositoryToken(College),
-    );
-    facultyRepository = module.get<Repository<Faculty>>(
-      getRepositoryToken(Faculty),
-    );
-    departmentRepository = module.get<Repository<Department>>(
-      getRepositoryToken(Department),
-    );
-    lecturerRepository = module.get<Repository<Lecturer>>(
-      getRepositoryToken(Lecturer),
-    );
-    classRepository = module.get<Repository<Class>>(getRepositoryToken(Class));
+    studentQueue = module.get<Queue>(getQueueToken('student-queue'));
+    studentService = module.get<StudentService>(StudentService);
+    authProducer = module.get<AuthProducer>(AuthProducer);
     studentRepository = module.get<Repository<Student>>(
       getRepositoryToken(Student),
-    );
-    courseRepository = module.get<Repository<Course>>(
-      getRepositoryToken(Course),
-    );
-    courseMaterialRepository = module.get<Repository<CourseMaterial>>(
-      getRepositoryToken(CourseMaterial),
     );
   });
 
@@ -112,11 +73,11 @@ describe('OrganizationService', () => {
       await repository.query(`TRUNCATE "${entity.tableName}" CASCADE;`);
     }
     // Clear the queue
-    await organizationQueue.clean(0, 3, 'active');
-    await organizationQueue.clean(0, 3, 'completed');
-    await organizationQueue.clean(0, 3, 'failed');
-    await organizationQueue.clean(0, 3, 'delayed');
-    await organizationQueue.clean(0, 3, 'wait');
+    await studentQueue.clean(0, 3, 'active');
+    await studentQueue.clean(0, 3, 'completed');
+    await studentQueue.clean(0, 3, 'failed');
+    await studentQueue.clean(0, 3, 'delayed');
+    await studentQueue.clean(0, 3, 'wait');
 
     jest.restoreAllMocks();
   });
@@ -126,25 +87,136 @@ describe('OrganizationService', () => {
     await module.close();
   });
 
-  // Helper function to process queue jobs and wait for completion
-  const processQueueJobs = async (): Promise<void> => {
-    // Get all waiting jobs
-    const jobs = await organizationQueue.getWaiting(0, -1);
+  describe('requestPasswordReset', () => {
+    it('should generate a reset token and send email for existing student', async () => {
+      // Create a test student
+      const student = await studentRepository.save({
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john.doe@example.com',
+        phone_number: '+1234567890',
+        address: '123 Test St',
+        date_of_birth: new Date('2000-01-01'),
+        gender: Gender.MALE,
+        password: await HashHelper.encrypt('password123'),
+      });
 
-    // If there are jobs, process them
-    if (jobs.length > 0) {
-      for (const job of jobs) {
-        try {
-          // Manually call the consumer's process method
-          await orgConsumer.process(job);
-          // Mark job as completed
-          // await job.moveToCompleted('', '');
-        } catch (error) {
-          // Mark job as failed
-          console.log('MARKED_ERROR:', error);
-          // await job.moveToFailed(error, '');
-        }
-      }
-    }
-  };
+      // Mock the authProducer
+      const sendEmailSpy = jest
+        .spyOn(authProducer, 'sendPasswordResetEmail')
+        .mockResolvedValue(undefined);
+
+      const result = await studentService.requestPasswordReset(
+        'john.doe@example.com',
+      );
+
+      expect(result.message).toBe('Password reset email sent successfully');
+
+      // Verify token was saved
+      const updatedStudent = await studentRepository.findOne({
+        where: { id: student.id },
+      });
+      expect(updatedStudent?.reset_token).toBeDefined();
+      expect(updatedStudent?.reset_token_expires_at).toBeDefined();
+      expect(updatedStudent?.reset_token_expires_at?.getTime()).toBeGreaterThan(
+        new Date().getTime(),
+      );
+
+      // Verify email was sent
+      expect(sendEmailSpy).toHaveBeenCalledWith({
+        email: 'john.doe@example.com',
+      });
+    });
+
+    it('should throw NotFoundException for non-existent student', async () => {
+      await expect(
+        studentService.requestPasswordReset('nonexistent@example.com'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should reset password with valid token', async () => {
+      // Create a test student with a reset token
+      const resetToken = 'test-reset-token-123';
+      const hashedToken = await HashHelper.encrypt(resetToken);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+
+      const student = await studentRepository.save({
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane.smith@example.com',
+        phone_number: '+0987654321',
+        address: '456 Test Ave',
+        date_of_birth: new Date('2001-02-15'),
+        gender: Gender.FEMALE,
+        password: await HashHelper.encrypt('oldpassword'),
+        reset_token: hashedToken,
+        reset_token_expires_at: expiresAt,
+      });
+
+      const result = await studentService.resetPassword(
+        'jane.smith@example.com',
+        resetToken,
+        'newpassword123',
+      );
+
+      expect(result.message).toBe('Password reset successfully');
+
+      // Verify password was updated and token was invalidated
+      const updatedStudent = await studentRepository.findOne({
+        where: { id: student.id },
+      });
+
+      console.log(updatedStudent);
+      expect(updatedStudent?.reset_token).toBeNull();
+      expect(updatedStudent?.reset_token_expires_at).toBeNull();
+      expect(
+        await HashHelper.compare(
+          'newpassword123',
+          updatedStudent?.password || '',
+        ),
+      ).toBe(true);
+    });
+
+    it('should throw BadRequestException for invalid token', async () => {
+      await expect(
+        studentService.resetPassword(
+          'jane.smith@example.com',
+          'invalid-token',
+          'newpassword',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for expired token', async () => {
+      // Create a test student with an expired reset token
+      const resetToken = 'expired-token';
+      const hashedToken = await HashHelper.encrypt(resetToken);
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() - 1); // Expired 1 hour ago
+
+      await studentRepository.save({
+        first_name: 'Bob',
+        last_name: 'Johnson',
+        email: 'bob.johnson@example.com',
+        phone_number: '+1122334455',
+        address: '789 Test Blvd',
+        date_of_birth: new Date('1999-03-20'),
+        gender: Gender.MALE,
+        password: await HashHelper.encrypt('password'),
+        reset_token: hashedToken,
+        reset_token_expires_at: expiresAt,
+      });
+
+      await expect(
+        studentService.resetPassword(
+          'jane.smith@example.com',
+          resetToken,
+          'newpassword',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

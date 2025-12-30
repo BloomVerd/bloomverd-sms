@@ -1,26 +1,25 @@
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
+import { Queue } from 'bullmq';
 import { Connection, Repository } from 'typeorm';
 import {
   Class,
   College,
   Department,
   entities,
-  Lecturer,
-  Organization,
-  Student,
   Faculty,
+  Organization,
   Semester,
+  Student,
 } from '../../../database/entities';
-import { AuthService } from './auth.service';
-import { BullModule, getQueueToken } from '@nestjs/bullmq';
-import { AuthProducer } from './auth.producer';
-import { AuthConsumer } from './auth.consumer';
-import { Queue } from 'bullmq';
-import { HashHelper } from '../../../shared/helpers';
 import { Gender } from '../../../shared/enums';
+import { HashHelper } from '../../../shared/helpers';
+import { AuthConsumer } from './auth.consumer';
+import { AuthProducer } from './auth.producer';
+import { AuthService } from './auth.service';
 
 describe('StudentService', () => {
   let module: TestingModule;
@@ -75,7 +74,7 @@ describe('StudentService', () => {
     connection = module.get<Connection>(Connection);
     studentQueue = module.get<Queue>(getQueueToken('student-queue'));
     authConsumer = module.get<AuthConsumer>(AuthConsumer);
-
+    authService = module.get<AuthService>(AuthService);
     orgRepository = module.get<Repository<Organization>>(
       getRepositoryToken(Organization),
     );
@@ -120,21 +119,38 @@ describe('StudentService', () => {
     await module.close();
   });
 
-  describe('loginStudent', () => {
-    // console.log('tests to be written', authService);
-    it('should login a student with correct credentials', async () => {
+  describe('requestPasswordReset', () => {
+    it('should return successful message after request sent', async () => {
       const { student } = await setupData();
-      // Test implementation goes here
-      console.log('STUDENT:', student);
+
+      const response = await authService.requestPasswordReset(student.email);
+
+      expect(response.message).toEqual(
+        'Password reset email sent successfully',
+      );
     });
   });
 
-  // describe('requestPasswordReset', () => {
-  //   console.log('tests to be written', authService);
-  //   it('should send a password reset email to the student', async () => {
-  //     // Test implementation goes here
-  //   });
-  // });
+  describe('resetPassword', () => {
+    // console.log('tests to be written', authService);
+    it('should return successful message after password reset', async () => {
+      const { student } = await setupData();
+
+      const { resetToken } = await authService.requestPasswordReset(
+        student.email,
+      );
+
+      const response = await authService.resetPassword(
+        student.email,
+        resetToken || '',
+        'newPassword',
+      );
+
+      expect(response).toEqual({
+        message: 'Password reset successfully',
+      });
+    });
+  });
 
   // describe('resetPassword', () => {
   //   console.log('tests to be written', authService);

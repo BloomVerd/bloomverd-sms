@@ -9,9 +9,16 @@ export class AuthProducer {
     private readonly studentQueue: Queue,
   ) {}
 
-  async sendPasswordResetEmail({ email }: { email: string }) {
+  async sendPasswordResetEmail({
+    email,
+    resetToken,
+  }: {
+    email: string;
+    resetToken: string;
+  }) {
     await this.studentQueue.add('send-password-reset-email', {
       email,
+      resetToken,
     });
   }
 }

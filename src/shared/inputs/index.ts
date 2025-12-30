@@ -15,3 +15,5 @@ export * from './create-student.input';
 export * from './create-student-with-relationship.input';
 export * from './pagination.inputs';
 export * from './register.input';
+export * from './request-password-reset.input';
+export * from './reset-password.input';

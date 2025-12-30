@@ -1,5 +1,13 @@
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { ResetResponse, StudentLoginResponse } from 'src/shared/types';
+import {
+  RequestPasswordResetInput,
+  ResetPasswordInput,
+} from 'src/shared/inputs';
+import {
+  PasswordResetResponseType,
+  ResetResponse,
+  StudentLoginResponse,
+} from 'src/shared/types';
 import { AuthService } from './auth.service';
 
 @Resolver()
@@ -16,17 +24,21 @@ export class AuthResolver {
   }
 
   // Mutations
-  @Mutation(() => ResetResponse)
-  async requestPasswordReset(@Args('email') email: string) {
-    return this.authService.requestPasswordReset({ email });
+  @Mutation(() => PasswordResetResponseType)
+  async requestPasswordReset(
+    @Args('input') input: RequestPasswordResetInput,
+  ): Promise<PasswordResetResponseType> {
+    return this.authService.requestPasswordReset(input.email);
   }
 
-  @Mutation(() => ResetResponse)
+  @Mutation(() => PasswordResetResponseType)
   async resetPassword(
-    @Args('resetToken') resetToken: string,
-    @Args('password') password: string,
-    @Args('email') email: string,
-  ) {
-    return this.authService.resetPassword({ resetToken, password, email });
+    @Args('input') input: ResetPasswordInput,
+  ): Promise<PasswordResetResponseType> {
+    return this.authService.resetPassword(
+      input.email,
+      input.token,
+      input.new_password,
+    );
   }
 }

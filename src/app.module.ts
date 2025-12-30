@@ -5,6 +5,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { configValidationSchema } from './config.schema';
 import { DatabaseModule } from './database/database.module';
 import { OrganizationModule } from './modules/organizations/organization.module';
+import { StudentModule } from './modules/students/student.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { OrganizationModule } from './modules/organizations/organization.module'
     }),
     DatabaseModule,
     OrganizationModule,
+    StudentModule,
   ],
   controllers: [],
   providers: [],

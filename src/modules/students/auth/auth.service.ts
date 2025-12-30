@@ -1,14 +1,22 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as crypto from 'crypto';
+import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
 import { HashHelper } from '../../../shared/helpers';
 import { StudentLoginResponse } from '../../../shared/types';
-import { Repository } from 'typeorm';
 import { AuthProducer } from './auth.producer';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(Student)
     private readonly studentRepository: Repository<Student>,
@@ -37,7 +45,7 @@ export class AuthService {
 
         const isPasswordValid = await HashHelper.compare(
           password,
-          student.password,
+          student.password || '',
         );
 
         if (!isPasswordValid)
@@ -65,27 +73,95 @@ export class AuthService {
     );
   }
 
-  async requestPasswordReset({ email }: { email: string }) {
-    await this.authProducer.sendPasswordResetEmail({ email });
+  async requestPasswordReset(
+    email: string,
+  ): Promise<{ message: string; resetToken: string }> {
+    return this.studentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const student = await transactionalEntityManager.findOne(Student, {
+          where: { email },
+        });
 
-    return { message: 'Password reset email has been sent' };
+        if (!student) {
+          throw new NotFoundException('Student with this email does not exist');
+        }
+
+        // Generate a unique token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const hashedToken = await HashHelper.encrypt(resetToken);
+
+        // Set token expiration to 1 hour from now
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 1);
+
+        // Save the token in the student entity
+        student.reset_token = hashedToken;
+        student.reset_token_expires_at = expiresAt;
+        await this.studentRepository.save(student);
+
+        // Send email with the token
+        await this.authProducer.sendPasswordResetEmail({ email, resetToken });
+
+        this.logger.log(
+          `Password reset email sent successfully: ${resetToken}`,
+        );
+
+        return {
+          message: 'Password reset email sent successfully',
+          resetToken,
+        };
+      },
+    );
   }
 
-  async resetPassword({
-    resetToken,
-    password,
-    email,
-  }: {
-    resetToken: string;
-    password: string;
-    email: string;
-  }) {
-    // Placeholder logic for resetting password
-    // In a real implementation, you would verify the resetToken and update the password in the database
+  async resetPassword(
+    email: string,
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    return this.studentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const student = await transactionalEntityManager.findOne(Student, {
+          where: {
+            email,
+          },
+        });
 
-    await this.resetPassword({ resetToken, password, email });
+        if (!student) {
+          throw new BadRequestException('No student found');
+        }
 
-    return { message: 'Password has been successfully reset' };
+        if (
+          student.reset_token === null ||
+          student.reset_token_expires_at === null
+        ) {
+          throw new BadRequestException('No reset token provided');
+        }
+
+        if (student.reset_token_expires_at.valueOf() < new Date().valueOf()) {
+          throw new BadRequestException('Reset token expired');
+        }
+
+        const hashedResetToken = await HashHelper.compare(
+          token,
+          student.reset_token,
+        );
+
+        if (!hashedResetToken) {
+          throw new BadRequestException('Invalid or expired reset token');
+        }
+
+        // Update the student's password
+        student.password = await HashHelper.encrypt(newPassword);
+
+        // Invalidate the token
+        student.reset_token = '';
+        student.reset_token_expires_at = new Date();
+        await this.studentRepository.save(student);
+
+        return { message: 'Password reset successfully' };
+      },
+    );
   }
 
   async sendEmail({
