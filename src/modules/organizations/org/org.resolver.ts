@@ -1,12 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { CollegeTypeClass } from 'src/database/types';
+import { CollegeTypeClass, CourseMaterialTypeClass } from 'src/database/types';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
   CreateClassInput,
   CreateClassWithRelationshipInput,
   CreateCollegeInput,
   CreateCourseInput,
+  CreateCourseMaterialInput,
   CreateCourseWithRelationshipInput,
   CreateDepartmentInput,
   CreateDepartmentWithRelationshipInput,
@@ -159,6 +160,26 @@ export class OrgResolver {
     return this.orgService.validateCourseData({
       organizationEmail: email,
       courses,
+    });
+  }
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [CourseMaterialTypeClass])
+  uploadCourseMaterial(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('courseId', { type: () => String!, nullable: false })
+    courseId: string,
+    @Args('materials', {
+      type: () => [CreateCourseMaterialInput!]!,
+      nullable: false,
+    })
+    materials: CreateCourseMaterialInput[],
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.uploadCourseMaterial({
+      organizationEmail: email,
+      courseId,
+      materials,
     });
   }
 

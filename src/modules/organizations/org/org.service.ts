@@ -1497,11 +1497,11 @@ export class OrgService {
   }
 
   async uploadCourseMaterial({
-    organizationalEmail,
+    organizationEmail,
     courseId,
     materials,
   }: {
-    organizationalEmail: string;
+    organizationEmail: string;
     courseId: string;
     materials: CreateCourseMaterialInput[];
   }) {
@@ -1516,7 +1516,7 @@ export class OrgService {
                   faculty: {
                     college: {
                       organization: {
-                        email: organizationalEmail,
+                        email: organizationEmail,
                       },
                     },
                   },
@@ -1525,6 +1525,8 @@ export class OrgService {
             },
           },
         });
+
+        this.logger.log(`Course found: ${course?.id}`);
 
         if (!course) {
           this.logger.error('Course not found!');
