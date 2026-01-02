@@ -1,10 +1,10 @@
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
-import { Connection, Repository } from 'typeorm';
 import { Queue } from 'bullmq';
-import { getQueueToken } from '@nestjs/bullmq';
+import { Connection, Repository } from 'typeorm';
 import {
   Class,
   College,
@@ -19,10 +19,9 @@ import {
 } from '../../../database/entities';
 import { Gender } from '../../../shared/enums';
 import { HashHelper } from '../../../shared/helpers';
-import { OrgService } from './org.service';
-import { OrgProducer } from './org.producer';
 import { OrgConsumer } from './org.consumer';
-import { BullModule } from '@nestjs/bullmq';
+import { OrgProducer } from './org.producer';
+import { OrgService } from './org.service';
 
 describe('OrganizationService', () => {
   let module: TestingModule;
@@ -435,7 +434,7 @@ describe('OrganizationService', () => {
       });
 
       const materials = await orgService.uploadCourseMaterial({
-        organizationalEmail: organization.email,
+        organizationEmail: organization.email,
         courseId: courses[0].id,
         materials: materialsData,
       });

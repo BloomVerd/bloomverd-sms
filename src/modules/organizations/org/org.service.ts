@@ -5,9 +5,11 @@ import {
   Class,
   College,
   Course,
+  CourseExam,
   CourseMaterial,
   Department,
   Faculty,
+  Iec,
   Lecturer,
   Organization,
   Semester,
@@ -1347,11 +1349,15 @@ export class OrgService {
               throw new BadRequestException('semester not found!');
             }
 
+            const courseExam = new CourseExam();
+            await transactionalEntityManager.save(courseExam);
+
             const new_semester_course = new Course();
             new_semester_course.course_code = `${semester.class.department.faculty.college.organization.id}-${course.code}`;
             new_semester_course.name = course.name;
             new_semester_course.credits = course.credits;
             new_semester_course.semesters = [semester];
+            new_semester_course.exams = [courseExam];
 
             return new_semester_course;
           }),
@@ -1548,6 +1554,49 @@ export class OrgService {
         );
 
         return transactionalEntityManager.save(new_course_materials);
+      },
+    );
+  }
+
+  async addOrganizationIEC({
+    organizationEmail,
+    iecEmail,
+  }: {
+    organizationEmail: string;
+    iecEmail: string;
+  }) {
+    return await this.courseRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: { email: organizationEmail },
+          },
+        );
+
+        if (!organization) {
+          throw new BadRequestException('Organization not found');
+        }
+
+        const existingIEC = await transactionalEntityManager.findOne(Iec, {
+          where: { email: iecEmail },
+          relations: ['organizations'],
+        });
+
+        if (!existingIEC) {
+          throw new BadRequestException('IEC not found');
+        }
+
+        if (
+          existingIEC.organizations.find((org) => org.id === organization.id)
+        ) {
+          throw new BadRequestException(
+            'Organization already associated with IEC',
+          );
+        }
+
+        existingIEC.organizations.push(organization);
+        return await transactionalEntityManager.save(existingIEC);
       },
     );
   }

@@ -77,4 +77,44 @@ export class StudentService {
 
     return student?.class.semesters[0].courses[0].materials;
   }
+
+  async getStudentSemesterResults({
+    email,
+    semesterId,
+  }: {
+    email: string;
+    semesterId: string;
+  }) {
+    const student = await this.studentRepository.findOne({
+      where: {
+        email,
+        class: {
+          semesters: {
+            id: semesterId,
+            courses: {
+              exams: {
+                results: {
+                  student_email: email,
+                },
+              },
+            },
+          },
+        },
+      },
+
+      relations: ['class.semesters.courses.exams.results.exam.course'],
+    });
+
+    if (!student) {
+      throw new BadRequestException('student not found');
+    }
+
+    return student?.class.semesters[0].courses
+      .map((course) => {
+        const results = course.exams.map((exam) => exam.results).flat();
+
+        return results;
+      })
+      .flat();
+  }
 }

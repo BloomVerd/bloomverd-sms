@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { configValidationSchema } from './config.schema';
 import { DatabaseModule } from './database/database.module';
+import { IecModule } from './modules/iecs/iec.module';
 import { OrganizationModule } from './modules/organizations/organization.module';
 import { StudentModule } from './modules/students/student.module';
 
@@ -27,6 +28,7 @@ import { StudentModule } from './modules/students/student.module';
     DatabaseModule,
     OrganizationModule,
     StudentModule,
+    IecModule,
   ],
   controllers: [],
   providers: [],

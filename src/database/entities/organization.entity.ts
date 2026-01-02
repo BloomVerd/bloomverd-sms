@@ -1,5 +1,12 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { College } from './college.entity';
+import { Iec } from './iec.entity';
 
 @Entity('organizations')
 export class Organization {
@@ -17,4 +24,7 @@ export class Organization {
 
   @OneToMany(() => College, (college) => college.organization)
   colleges: College[];
+
+  @ManyToOne(() => Iec, (iec) => iec.organizations)
+  iec: Iec;
 }

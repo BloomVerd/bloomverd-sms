@@ -17,3 +17,4 @@ export * from './pagination.inputs';
 export * from './register.input';
 export * from './request-password-reset.input';
 export * from './reset-password.input';
+export * from './upload-exam-results.input';
