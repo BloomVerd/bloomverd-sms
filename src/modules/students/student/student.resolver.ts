@@ -14,7 +14,7 @@ export class StudentResolver {
   constructor(private readonly studentService: StudentService) {}
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [SemesterTypeClass])
+  @Query(() => [SemesterTypeClass], { nullable: true })
   async getStudentSemesters(
     @Context() context: { req: { user: { email: string } } },
   ) {

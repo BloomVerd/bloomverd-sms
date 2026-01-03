@@ -11,4 +11,7 @@ export class SemesterTypeClass {
 
   @Field()
   courses: string;
+
+  @Field()
+  status: string;
 }
