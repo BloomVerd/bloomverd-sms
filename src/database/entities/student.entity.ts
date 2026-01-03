@@ -1,6 +1,15 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinTable,
+  ManyToMany,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Gender } from '../../shared/enums';
 import { Class } from './class.entity';
+import { Course } from './course.entity';
 
 @Entity('students')
 export class Student {
@@ -34,12 +43,26 @@ export class Student {
   @Column({ nullable: true })
   password: string;
 
-  @Column({ default: null })
+  @Column({ nullable: true })
   reset_token: string;
 
-  @Column({ default: null })
+  @Column({ type: 'timestamp', nullable: true })
   reset_token_expires_at: Date;
 
   @ManyToOne(() => Class, (cls) => cls.students)
   class: Class;
+
+  @ManyToMany(() => Course)
+  @JoinTable({
+    name: 'student_courses',
+    joinColumn: {
+      name: 'student_id',
+      referencedColumnName: 'id',
+    },
+    inverseJoinColumn: {
+      name: 'course_id',
+      referencedColumnName: 'id',
+    },
+  })
+  registered_courses: Course[];
 }

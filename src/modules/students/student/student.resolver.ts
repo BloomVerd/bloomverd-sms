@@ -51,4 +51,22 @@ export class StudentResolver {
     const { email } = context.req.user;
     return this.studentService.getStudentSemesterResults({ semesterId, email });
   }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [CourseTypeClass])
+  async registerSemesterCoursesForStudent(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('courseIds', { type: () => [String], nullable: true })
+    courseIds: string[],
+  ) {
+    const { email } = context.req.user;
+    return this.studentService.registerSemesterCoursesForStudent({
+      courseIds,
+      email,
+    });
+  }
 }
+/// Add status to semesters
+// Ban two semesyers from being in progress
+// Add endpoint to allow organization to set semester grogress by a particular class
+//Endpoint for course registration

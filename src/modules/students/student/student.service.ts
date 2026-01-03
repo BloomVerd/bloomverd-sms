@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
+import { SemesterStatus } from 'src/shared/enums';
 
 @Injectable()
 export class StudentService {
@@ -116,5 +117,71 @@ export class StudentService {
         return results;
       })
       .flat();
+  }
+
+  async registerSemesterCoursesForStudent({
+    email,
+    courseIds,
+  }: {
+    email: string;
+    courseIds: string[];
+  }) {
+    return this.studentRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const student = await transactionalEntityManager.findOne(Student, {
+          where: {
+            email,
+          },
+
+          relations: ['class.semesters.courses', 'registered_courses'],
+        });
+
+        if (!student) {
+          throw new BadRequestException('student not found');
+        }
+
+        const currentSemester = student.class.semesters.find(
+          (sem) => sem.status === SemesterStatus.IN_PROGRESS,
+        );
+
+        if (!currentSemester?.courses) {
+          throw new BadRequestException(
+            'There are no courses found for this semester',
+          );
+        }
+
+        courseIds.forEach((courseId) => {
+          const course = currentSemester?.courses.find(
+            (crs) => crs.id === courseId,
+          );
+
+          if (!course) {
+            throw new BadRequestException('course not found');
+          }
+
+          if (course.is_required) {
+            throw new BadRequestException(
+              `This ${course.name} is a required course`,
+            );
+          }
+        });
+        const requiredCourses = currentSemester?.courses.filter(
+          (course) => course.is_required === true,
+        );
+
+        const optionalCourses = currentSemester?.courses.filter(
+          (course) =>
+            course.is_required === false && courseIds.includes(course.id),
+        );
+
+        student.registered_courses.push(
+          ...(optionalCourses || []),
+          ...(requiredCourses || []),
+        );
+
+        await transactionalEntityManager.save(student);
+        return [...(optionalCourses || []), ...(requiredCourses || [])];
+      },
+    );
   }
 }

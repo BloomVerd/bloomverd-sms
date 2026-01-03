@@ -17,4 +17,7 @@ export class CourseTypeClass {
 
   @Field(() => [CourseMaterialTypeClass])
   materials: CourseMaterialTypeClass[];
+
+  @Field()
+  is_required: boolean;
 }

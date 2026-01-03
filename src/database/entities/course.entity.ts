@@ -25,6 +25,9 @@ export class Course {
   @Column()
   name: string;
 
+  @Column({ default: false })
+  is_required: boolean;
+
   @ManyToMany(() => Semester, (semester) => semester.courses)
   @JoinTable({
     name: 'course_semester',

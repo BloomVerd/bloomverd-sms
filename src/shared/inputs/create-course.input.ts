@@ -16,4 +16,7 @@ export class CreateCourseInput {
 
   @Field()
   semesterNumber: number;
+
+  @Field()
+  isRequired: boolean;
 }

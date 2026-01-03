@@ -15,7 +15,7 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
-import { Gender } from '../../../shared/enums';
+import { Gender, SemesterStatus } from '../../../shared/enums';
 import {
   getDateValidationError,
   getEmailValidationError,
@@ -65,6 +65,8 @@ export class OrgService {
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
     private readonly orgProducer: OrgProducer,
+    @InjectRepository(Semester)
+    private semesterRepository: Repository<Semester>,
   ) {}
 
   /**
@@ -144,10 +146,152 @@ export class OrgService {
     );
   }
 
-  /**
-   * COLLEGE VALIDATION
-   * Validates: email format, name required, duplicates (in data and database)
-   */
+  async setSemestersToInProgress({
+    organizationEmail,
+  }: {
+    organizationEmail: string;
+  }) {
+    return this.semesterRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+            relations: ['colleges.faculties.departments.classes.semesters'],
+          },
+        );
+
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const classes = organization.colleges
+          .map((college) =>
+            college.faculties.map((faculty) =>
+              faculty.departments.map((department) => department.classes),
+            ),
+          )
+          .flat(3);
+        const updatedSemesters = await Promise.all(
+          classes.map((cls) => {
+            for (let i = 1; i < cls.semesters.length + 1; i++) {
+              const currentSemester = cls.semesters.find(
+                (sem) => sem.semester_number === i,
+              );
+              if (currentSemester?.status === SemesterStatus.IN_PROGRESS) {
+                return currentSemester;
+              }
+              if (currentSemester?.status === SemesterStatus.PENDING) {
+                currentSemester.status = SemesterStatus.IN_PROGRESS;
+                return currentSemester;
+              }
+            }
+          }),
+        );
+        return transactionalEntityManager.save(updatedSemesters);
+      },
+    );
+  }
+
+  async setSemestersToCompleted({
+    organizationEmail,
+  }: {
+    organizationEmail: string;
+  }) {
+    return this.semesterRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const organization = await transactionalEntityManager.findOne(
+          Organization,
+          {
+            where: {
+              email: organizationEmail,
+            },
+            relations: ['colleges.faculties.departments.classes.semesters'],
+          },
+        );
+
+        if (!organization) {
+          this.logger.error('Organiztion not found!');
+          throw new BadRequestException('Organiztion not found!');
+        }
+
+        const classes = organization.colleges
+          .map((college) =>
+            college.faculties.map((faculty) =>
+              faculty.departments.map((department) => department.classes),
+            ),
+          )
+          .flat(3);
+        const updatedSemesters = await Promise.all(
+          classes.map((cls) => {
+            for (let i = 1; i < cls.semesters.length + 1; i++) {
+              const currentSemester = cls.semesters.find(
+                (sem) => sem.semester_number === i,
+              );
+
+              if (currentSemester?.status === SemesterStatus.IN_PROGRESS) {
+                currentSemester.status = SemesterStatus.COMPLETED;
+                return currentSemester;
+              }
+            }
+          }),
+        );
+        const filteredSemesters = updatedSemesters.filter(
+          (semester) => semester !== undefined,
+        );
+        if (filteredSemesters.length === 0) {
+          return [];
+        }
+        return transactionalEntityManager.save(filteredSemesters);
+      },
+    );
+  }
+  async createFaculties({
+    organizationEmail,
+    faculties,
+  }: {
+    organizationEmail: string;
+    faculties: CreateFacultyWithRelationshipInput[];
+  }) {
+    return await this.facultyRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const new_faculties: Faculty[] = await Promise.all(
+          faculties.map(async (faculty) => {
+            const college = await transactionalEntityManager.findOne(College, {
+              where: {
+                email: faculty.collegeEmail,
+                organization: {
+                  email: organizationEmail,
+                },
+              },
+              relations: ['organization'],
+            });
+
+            if (!college) {
+              this.logger.error('College not found!');
+              throw new BadRequestException('College not found!');
+            }
+
+            const new_faculty = new Faculty();
+            new_faculty.email = faculty.email;
+            new_faculty.name = `${college.organization.id}-${faculty.name}`;
+            new_faculty.college = college;
+
+            return new_faculty;
+          }),
+        );
+
+        this.logger.log(
+          `Created ${new_faculties.length} faculties(s) successfully`,
+        );
+        return transactionalEntityManager.save(new_faculties);
+      },
+    );
+  }
+
   async validateCollegeData({
     organizationEmail,
     colleges,
@@ -265,49 +409,6 @@ export class OrgService {
         );
 
         return errors;
-      },
-    );
-  }
-
-  async createFaculties({
-    organizationEmail,
-    faculties,
-  }: {
-    organizationEmail: string;
-    faculties: CreateFacultyWithRelationshipInput[];
-  }) {
-    return await this.facultyRepository.manager.transaction(
-      async (transactionalEntityManager) => {
-        const new_faculties: Faculty[] = await Promise.all(
-          faculties.map(async (faculty) => {
-            const college = await transactionalEntityManager.findOne(College, {
-              where: {
-                email: faculty.collegeEmail,
-                organization: {
-                  email: organizationEmail,
-                },
-              },
-              relations: ['organization'],
-            });
-
-            if (!college) {
-              this.logger.error('College not found!');
-              throw new BadRequestException('College not found!');
-            }
-
-            const new_faculty = new Faculty();
-            new_faculty.email = faculty.email;
-            new_faculty.name = `${college.organization.id}-${faculty.name}`;
-            new_faculty.college = college;
-
-            return new_faculty;
-          }),
-        );
-
-        this.logger.log(
-          `Created ${new_faculties.length} faculties(s) successfully`,
-        );
-        return transactionalEntityManager.save(new_faculties);
       },
     );
   }
@@ -1358,6 +1459,7 @@ export class OrgService {
             new_semester_course.credits = course.credits;
             new_semester_course.semesters = [semester];
             new_semester_course.exams = [courseExam];
+            new_semester_course.is_required = course.isRequired;
 
             return new_semester_course;
           }),

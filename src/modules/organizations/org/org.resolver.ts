@@ -4,6 +4,7 @@ import {
   CollegeTypeClass,
   CourseMaterialTypeClass,
   IecTypeClass,
+  SemesterTypeClass,
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
@@ -146,6 +147,34 @@ export class OrgResolver {
     return this.orgService.validateStudentData({
       organizationEmail: email,
       students,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [SemesterTypeClass])
+  setSemestersToInProgress(
+    @Context() context: { req: { user: { email: string } } },
+  ) {
+    const { email } = context.req.user;
+    //  organization exists
+    // fetcch all classes under org
+    // get semester for those classes to be set
+    // perform database overide
+
+    return this.orgService.setSemestersToInProgress({
+      organizationEmail: email,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [SemesterTypeClass], { nullable: true })
+  setSemesterToCompleted(
+    @Context() context: { req: { user: { email: string } } },
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.setSemestersToCompleted({
+      organizationEmail: email,
     });
   }
 
