@@ -1,5 +1,7 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 import { CourseMaterialTypeClass } from './course-material.type';
+import { CourseExam } from '../entities';
+import { CourseExamTypeClass } from './course-exam.type';
 
 @ObjectType('Course')
 export class CourseTypeClass {
@@ -15,9 +17,12 @@ export class CourseTypeClass {
   @Field()
   credits: number;
 
-  @Field(() => [CourseMaterialTypeClass])
-  materials: CourseMaterialTypeClass[];
+  @Field(() => [CourseMaterialTypeClass], { nullable: true })
+  materials?: CourseMaterialTypeClass[];
 
   @Field()
   is_required: boolean;
+
+  @Field(() => [CourseExamTypeClass], { nullable: true })
+  exams?: CourseExamTypeClass[];
 }

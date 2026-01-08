@@ -4,6 +4,7 @@ import {
   CourseExamResultTypeClass,
   CourseMaterialTypeClass,
   CourseTypeClass,
+  FeeTypeClass,
   SemesterTypeClass,
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from 'src/shared/guards';
@@ -64,6 +65,15 @@ export class StudentResolver {
       courseIds,
       email,
     });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [FeeTypeClass])
+  async getStudentFees(
+    @Context() context: { req: { user: { email: string } } },
+  ) {
+    const { email } = context.req.user;
+    return this.studentService.getStudentFees({ email });
   }
 }
 /// Add status to semesters

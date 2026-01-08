@@ -3,12 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
 import { SemesterStatus } from 'src/shared/enums';
+import { Fee } from 'src/database/entities/fee.entity';
 
 @Injectable()
 export class StudentService {
   constructor(
     @InjectRepository(Student)
     private readonly studentRepository: Repository<Student>,
+    @InjectRepository(Fee)
+    private readonly feeRepository: Repository<Fee>,
   ) {}
 
   async getStudentSemesters(email: string) {
@@ -183,5 +186,33 @@ export class StudentService {
         return [...(optionalCourses || []), ...(requiredCourses || [])];
       },
     );
+  }
+
+  async getStudentFees({ email }: { email: string }) {
+    const student = await this.studentRepository.findOne({
+      where: {
+        email,
+      },
+    });
+    if (!student) {
+      throw new BadRequestException('student not found');
+    }
+
+    const fees = await this.feeRepository.find({
+      where: {
+        faculty: {
+          departments: {
+            classes: {
+              students: {
+                id: student.id,
+              },
+            },
+          },
+        },
+        year_group: student.year_group,
+      },
+    });
+
+    return fees;
   }
 }

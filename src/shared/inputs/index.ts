@@ -18,3 +18,8 @@ export * from './register.input';
 export * from './request-password-reset.input';
 export * from './reset-password.input';
 export * from './upload-exam-results.input';
+export * from './organization-department-filter.input';
+export * from './organization-faculty-filter.input';
+export * from './organization-class-filter.input';
+export * from './organization-course-filter.input';
+export * from './organization-student-filter.input';

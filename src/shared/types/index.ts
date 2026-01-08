@@ -1,5 +1,3 @@
-export * from './department-type';
-export * from './faculty-type';
 export * from './iec-login-response.type';
 export * from './lecturer-type';
 export * from './organization-login-response.type';
@@ -9,3 +7,5 @@ export * from './reset-response.type';
 export * from './student-login-response.type';
 export * from './upload-exam-results-response.type';
 export * from './validation-response.type';
+export * from './fee-connection.type';
+export * from './student-connection.type';

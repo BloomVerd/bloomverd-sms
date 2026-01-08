@@ -13,3 +13,4 @@ export * from './lecturer.type';
 export * from './organization.type';
 export * from './semester.type';
 export * from './student.type';
+export * from './fee.type';

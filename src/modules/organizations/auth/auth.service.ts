@@ -5,6 +5,7 @@ import { HashHelper } from 'src/shared/helpers';
 import { OrganizationLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
 import { Organization } from '../../../database/entities';
+import { OrganizationSetting } from 'src/database/entities/organization_setting.entity';
 
 @Injectable()
 export class AuthService {
@@ -36,9 +37,13 @@ export class AuthService {
           throw new Error('Organization with this email already exists');
         }
 
+        const setting = new OrganizationSetting();
+        await transactionalEntityManager.save(OrganizationSetting, setting);
+
         const organization = new Organization();
         organization.name = name;
         organization.email = email;
+        organization.setting = setting;
         organization.password = await HashHelper.encrypt(password);
 
         await transactionalEntityManager.save(Organization, organization);

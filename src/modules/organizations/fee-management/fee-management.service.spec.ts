@@ -1,21 +1,14 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   Class,
   College,
   Course,
   CourseExam,
-  CourseExamResult,
   CourseMaterial,
   Department,
   Faculty,
-  Fee,
   Iec,
   Lecturer,
   Organization,
@@ -45,19 +38,12 @@ import {
   CreateLecturerWithRelationshipInput,
   CreateStudentInput,
   CreateStudentWithRelationshipInput,
-  OrganizationClassFilterInput,
-  OrganizationCourseFilterInput,
-  OrganizationDepartmentFilterInput,
-  OrganizationStudentFilterInput,
-  UploadExamResultsInput,
 } from '../../../shared/inputs';
 import {
   ValidationFieldType,
   ValidationResponseType,
 } from '../../../shared/types';
 import { OrgProducer } from './org.producer';
-import { last } from 'rxjs';
-import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
 
 @Injectable()
 export class OrgService {
@@ -81,14 +67,6 @@ export class OrgService {
     private readonly orgProducer: OrgProducer,
     @InjectRepository(Semester)
     private semesterRepository: Repository<Semester>,
-    @InjectRepository(Organization)
-    private organizationRepository: Repository<Organization>,
-    @InjectRepository(Fee)
-    private feeRepository: Repository<Fee>,
-    @InjectRepository(CourseExam)
-    private courseExamRepository: Repository<CourseExam>,
-    @InjectRepository(CourseExamResult)
-    private courseExamResultRepository: Repository<CourseExamResult>,
   ) {}
 
   /**
@@ -271,7 +249,6 @@ export class OrgService {
       },
     );
   }
-
   async createFaculties({
     organizationEmail,
     faculties,
@@ -1207,7 +1184,6 @@ export class OrgService {
             new_student.gender = student.gender;
             new_student.address = student.address;
             new_student.phone_number = student.phoneNumber;
-            new_student.year_group = student.yearGroup;
 
             new_student.class = dep_class;
 
@@ -1725,463 +1701,6 @@ export class OrgService {
         return await transactionalEntityManager.save(existingIEC);
       },
     );
-  }
-
-  async listActiveSemesterFees({
-    email,
-    searchTerm,
-    page = 1,
-    limit = 10,
-  }: {
-    page?: number;
-    limit?: number;
-    email: string;
-    searchTerm?: string;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const currentPage = Math.max(1, Number(page));
-
-    const skip = Number((currentPage - 1) * limit);
-
-    const [fees, total] = await this.feeRepository.findAndCount({
-      skip,
-      take: limit,
-      order: { level: 'DESC' },
-      where: {
-        name: searchTerm ? ILike(`%${searchTerm.trim()}%`) : undefined,
-        faculty: {
-          departments: {
-            classes: {
-              semesters: {
-                status: SemesterStatus.IN_PROGRESS || SemesterStatus.PENDING,
-              },
-            },
-          },
-          college: {
-            organization: {
-              email,
-            },
-          },
-        },
-      },
-    });
-
-    const lastPage = Math.ceil(total / limit);
-
-    return {
-      edges: fees.map((fee) => ({
-        node: fee,
-      })),
-      meta: {
-        total,
-        page,
-        lastPage,
-        limit,
-      },
-    };
-  }
-
-  async getOrganizationFaculties({
-    email,
-    filter,
-  }: {
-    email: string;
-    filter?: OrganizationFacultyFilterInput;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const faculties = await this.facultyRepository.find({
-      where: {
-        college: {
-          id: filter?.collegeId ? filter.collegeId : undefined,
-          organization: {
-            email,
-          },
-        },
-      },
-    });
-    return faculties;
-  }
-
-  async getOrganizationColleges({ email }: { email: string }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const colleges = await this.collegeRepository.find({
-      where: {
-        organization: {
-          email,
-        },
-      },
-    });
-    return colleges;
-  }
-
-  async getOrganizationDepartments({
-    email,
-    filter,
-  }: {
-    email: string;
-    filter?: OrganizationDepartmentFilterInput;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const departments = await this.departmentRepository.find({
-      where: {
-        faculty: {
-          id: filter?.facultyId ? filter.facultyId : undefined,
-          college: {
-            organization: {
-              email,
-            },
-          },
-        },
-      },
-    });
-    return departments;
-  }
-
-  async getOrganizationClasses({
-    email,
-    filter,
-  }: {
-    email: string;
-    filter?: OrganizationClassFilterInput;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const classes = await this.classRepository.find({
-      where: {
-        department: {
-          id: filter?.departmentId ? filter.departmentId : undefined,
-          faculty: {
-            college: {
-              organization: {
-                email,
-              },
-            },
-          },
-        },
-      },
-    });
-    return classes;
-  }
-
-  async getOrganizationClassCourses({
-    email,
-    filter,
-  }: {
-    email: string;
-    filter?: OrganizationCourseFilterInput;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const courses = await this.courseRepository.find({
-      where: {
-        semesters: {
-          class: {
-            id: filter?.classId ? filter.classId : undefined,
-            department: {
-              faculty: {
-                college: {
-                  organization: {
-                    email,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      relations: ['materials', 'exams'],
-    });
-    return courses;
-  }
-
-  async listOrganizationStudents({
-    email,
-    searchTerm,
-    page = 1,
-    limit = 10,
-    filter,
-  }: {
-    page?: number;
-    limit?: number;
-    email: string;
-    searchTerm?: string;
-    filter?: OrganizationStudentFilterInput;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const currentPage = Math.max(1, Number(page));
-
-    const skip = Number((currentPage - 1) * limit);
-
-    const [students, total] = await this.studentRepository.findAndCount({
-      skip,
-      take: limit,
-      order: { last_name: 'ASC', first_name: 'ASC' },
-      where: {
-        first_name: searchTerm ? ILike(`%${searchTerm.trim()}%`) : undefined,
-        last_name: searchTerm ? ILike(`%${searchTerm.trim()}%`) : undefined,
-        class: {
-          id: filter?.classId ? filter.classId : undefined,
-          department: {
-            id: filter?.departmentId ? filter.departmentId : undefined,
-            faculty: {
-              id: filter?.facultyId ? filter.facultyId : undefined,
-              college: {
-                id: filter?.collegeId ? filter.collegeId : undefined,
-                organization: {
-                  email,
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const lastPage = Math.ceil(total / limit);
-
-    return {
-      edges: students.map((student) => ({
-        node: student,
-      })),
-      meta: {
-        total,
-        page,
-        lastPage,
-        limit,
-      },
-    };
-  }
-
-  async getOrganizationStudent({
-    email,
-    studentId,
-  }: {
-    email: string;
-    studentId: string;
-  }) {
-    const organization = await this.organizationRepository.findOne({
-      where: {
-        email,
-      },
-    });
-
-    if (!organization) {
-      throw new BadRequestException('Organization not found');
-    }
-
-    const student = await this.studentRepository.findOne({
-      where: {
-        id: studentId,
-        class: {
-          department: {
-            faculty: {
-              college: {
-                organization: {
-                  email,
-                },
-              },
-            },
-          },
-        },
-      },
-      relations: [
-        'class.department.faculty.college',
-        'class.department.faculty.fees',
-        'registered_courses',
-      ],
-    });
-    return {
-      ...student,
-
-      class: {
-        ...student?.class,
-        department: {
-          ...student?.class.department,
-          faculty: {
-            ...student?.class.department.faculty,
-            fees: student?.class.department.faculty.fees.filter(
-              (fee) =>
-                fee.student_type === student.student_type &&
-                fee.year_group === student.year_group,
-            ),
-          },
-        },
-      },
-    };
-  }
-
-  async uploadExamResultsFromOrganization({
-    organizationEmail,
-
-    results,
-  }: {
-    organizationEmail: string;
-
-    results: UploadExamResultsInput[];
-  }) {
-    // Get the organization with which the IEC is associated
-    const organization = await this.organizationRepository.findOne({
-      where: { email: organizationEmail },
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found ');
-    }
-
-    // Loop through the results and upload each one
-    // Add an errors array for students whose exam upload failed
-    const errors: string[] = [];
-
-    await Promise.all(
-      results.map(async (result) => {
-        try {
-          // Find out if the student exist for that organization
-          const student = await this.studentRepository.findOne({
-            where: {
-              email: result.student_email,
-              class: {
-                department: {
-                  faculty: {
-                    college: {
-                      organization: {
-                        email: organizationEmail,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          });
-
-          if (!student) {
-            this.logger.error(
-              `Student not found for email ${result.student_email}, result: ${JSON.stringify(result)}`,
-            );
-            errors.push(`Student not found for email ${result.student_email}`);
-          }
-
-          // Get the student's exam
-          const exam = await this.courseExamRepository.findOne({
-            where: {
-              id: result.exam_id,
-              course: {
-                semesters: {
-                  class: {
-                    department: {
-                      faculty: {
-                        college: {
-                          organization: {
-                            email: organizationEmail,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            relations: ['results'],
-          });
-
-          if (!exam) {
-            this.logger.error(
-              `Exam not found for student ${result?.student_email}, result ${JSON.stringify(result)}`,
-            );
-            errors.push(
-              `Exam not found for student ${result?.student_email}, result ${JSON.stringify(result)}`,
-            );
-          }
-
-          // Update the exam result
-          if (student && exam) {
-            const existingResult = exam.results.find(
-              (res) => res.student_email === result.student_email,
-            );
-            if (existingResult) {
-              existingResult.student_email = result.student_email;
-              existingResult.score = result.score;
-              await this.courseExamResultRepository.save(existingResult);
-            } else {
-              const newResult = new CourseExamResult();
-              newResult.exam = exam;
-              newResult.student_email = result.student_email;
-              newResult.score = result.score;
-              await this.courseExamResultRepository.save(newResult);
-            }
-          }
-        } catch (error) {
-          errors.push(
-            `Failed to upload exam result for student ${result.student_email}, error: ${error.message}`,
-          );
-        }
-      }),
-    );
-
-    if (errors.length > 0) {
-      throw new BadRequestException(errors);
-    }
-
-    return { message: 'Exam results uploaded successfully' };
   }
 
   async setupAction({

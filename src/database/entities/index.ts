@@ -13,6 +13,7 @@ import { Lecturer } from './lecturer.entity';
 import { Organization } from './organization.entity';
 import { Semester } from './semester.entity';
 import { Student } from './student.entity';
+import { Fee } from './fee.entity';
 
 export const entities = [
   Class,
@@ -30,6 +31,7 @@ export const entities = [
   Organization,
   Semester,
   Student,
+  Fee,
 ];
 
 export {
@@ -48,4 +50,5 @@ export {
   Organization,
   Semester,
   Student,
+  Fee,
 };

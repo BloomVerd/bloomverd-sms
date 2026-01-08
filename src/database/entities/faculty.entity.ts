@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { College } from './college.entity';
 import { Department } from './department.entity';
+import { Fee } from './fee.entity';
 
 @Entity('faculties')
 export class Faculty {
@@ -35,4 +36,7 @@ export class Faculty {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @OneToMany(() => Fee, (fee) => fee.faculty)
+  fees: Fee[];
 }

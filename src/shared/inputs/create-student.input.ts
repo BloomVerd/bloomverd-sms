@@ -1,5 +1,5 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { Gender } from '../enums';
+import { Gender, StudentType } from '../enums';
 
 @InputType()
 export class CreateStudentInput {
@@ -19,6 +19,9 @@ export class CreateStudentInput {
   dateOfBirth: Date;
 
   @Field()
+  yearGroup: number;
+
+  @Field()
   gender: Gender;
 
   @Field()
@@ -26,4 +29,7 @@ export class CreateStudentInput {
 
   @Field()
   phoneNumber: string;
+
+  @Field()
+  studentType: StudentType;
 }

@@ -11,6 +11,8 @@ import { OrgResolver } from './org/org.resolver';
 import { OrgService } from './org/org.service';
 import { OrgProducer } from './org/org.producer';
 import { OrgConsumer } from './org/org.consumer';
+import { FeeManagementService } from './fee-management/fee-management.service';
+import { FeeManagementResolver } from './fee-management/fee-management.resolver';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { OrgConsumer } from './org/org.consumer';
     OrgService,
     OrgProducer,
     OrgConsumer,
+    FeeManagementService,
+    FeeManagementResolver,
   ],
 })
 export class OrganizationModule {}

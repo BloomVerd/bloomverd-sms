@@ -1,12 +1,15 @@
 import {
   Column,
   Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { College } from './college.entity';
 import { Iec } from './iec.entity';
+import { OrganizationSetting } from './organization_setting.entity';
 
 @Entity('organizations')
 export class Organization {
@@ -27,4 +30,8 @@ export class Organization {
 
   @ManyToOne(() => Iec, (iec) => iec.organizations)
   iec: Iec;
+
+  @OneToOne(() => OrganizationSetting, (setting) => setting.organization)
+  @JoinColumn()
+  setting: OrganizationSetting;
 }

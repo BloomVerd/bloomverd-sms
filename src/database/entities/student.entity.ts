@@ -4,10 +4,9 @@ import {
   JoinTable,
   ManyToMany,
   ManyToOne,
-  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Gender } from '../../shared/enums';
+import { StudentType, Gender } from '../../shared/enums';
 import { Class } from './class.entity';
 import { Course } from './course.entity';
 
@@ -46,11 +45,21 @@ export class Student {
   @Column({ nullable: true })
   reset_token: string;
 
+  @Column()
+  year_group: number;
+
   @Column({ type: 'timestamp', nullable: true })
   reset_token_expires_at: Date;
 
   @ManyToOne(() => Class, (cls) => cls.students)
   class: Class;
+
+  @Column({
+    type: 'enum',
+    enum: StudentType,
+    default: StudentType.REGULAR,
+  })
+  student_type: StudentType;
 
   @ManyToMany(() => Course)
   @JoinTable({

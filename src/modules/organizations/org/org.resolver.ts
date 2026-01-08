@@ -1,10 +1,16 @@
 import { UseGuards } from '@nestjs/common';
-import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Context, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import {
+  ClassTypeClass,
   CollegeTypeClass,
   CourseMaterialTypeClass,
+  CourseTypeClass,
+  DepartmentTypeClass,
+  FacultyTypeClass,
+  FeeTypeClass,
   IecTypeClass,
   SemesterTypeClass,
+  StudentTypeClass,
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
@@ -22,9 +28,18 @@ import {
   CreateLecturerWithRelationshipInput,
   CreateStudentInput,
   CreateStudentWithRelationshipInput,
+  OrganizationClassFilterInput,
+  OrganizationCourseFilterInput,
+  OrganizationDepartmentFilterInput,
+  OrganizationFacultyFilterInput,
+  OrganizationStudentFilterInput,
+  UploadExamResultsInput,
 } from '../../../shared/inputs';
 import {
+  FeeConnection,
   RegisterResponseType,
+  StudentConnection,
+  UploadExamResultsResponseType,
   ValidationResponseType,
 } from '../../../shared/types';
 import { OrgService } from './org.service';
@@ -283,6 +298,163 @@ export class OrgResolver {
       classes,
       students,
       courses,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => FeeConnection)
+  listActiveSemesterFees(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('searchTerm', { type: () => String, nullable: true })
+    searchTerm?: string,
+    @Args('page', { type: () => Int, nullable: true }) page?: number,
+    @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.listActiveSemesterFees({
+      email,
+      searchTerm,
+      page,
+      limit,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [FacultyTypeClass])
+  getOrganizationFaculties(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationFacultyFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationFaculties({
+      email,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [CollegeTypeClass])
+  getOrganizationColleges(
+    @Context() context: { req: { user: { email: string } } },
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationColleges({
+      email,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [DepartmentTypeClass])
+  getOrganizationDepartments(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationDepartmentFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationDepartments({
+      email,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [ClassTypeClass])
+  getOrganizationClasses(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationClassFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationClasses({
+      email,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [CourseTypeClass])
+  getOrganizationClassCourses(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationCourseFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationClassCourses({
+      email,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => StudentConnection)
+  listOrganizationStudents(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('searchTerm', { type: () => String, nullable: true })
+    searchTerm?: string,
+    @Args('page', { type: () => Int, nullable: true }) page?: number,
+    @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationStudentFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.listOrganizationStudents({
+      email,
+      searchTerm,
+      page,
+      limit,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => StudentTypeClass)
+  getOrganizationStudent(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('studentId', { type: () => String, nullable: false })
+    studentId: string,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationStudent({
+      email,
+      studentId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => UploadExamResultsResponseType)
+  uploadExamResultsFromOrganization(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('organizationEmail', { type: () => String!, nullable: false })
+    organizationEmail: string,
+    @Args('results', {
+      type: () => [UploadExamResultsInput!]!,
+      nullable: false,
+    })
+    results: UploadExamResultsInput[],
+  ) {
+    const { email } = context.req.user;
+    return this.orgService.uploadExamResultsFromOrganization({
+      organizationEmail,
+      results,
     });
   }
 }
