@@ -5,14 +5,15 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { entities } from 'src/database/entities';
 import { JwtStrategy } from 'src/shared/strategies';
+import { UploadModule } from '../uploads/upload.module';
 import { AuthResolver } from './auth/auth.resolver';
 import { AuthService } from './auth/auth.service';
+import { FeeManagementResolver } from './fee-management/fee-management.resolver';
+import { FeeManagementService } from './fee-management/fee-management.service';
+import { OrgConsumer } from './org/org.consumer';
+import { OrgProducer } from './org/org.producer';
 import { OrgResolver } from './org/org.resolver';
 import { OrgService } from './org/org.service';
-import { OrgProducer } from './org/org.producer';
-import { OrgConsumer } from './org/org.consumer';
-import { FeeManagementService } from './fee-management/fee-management.service';
-import { FeeManagementResolver } from './fee-management/fee-management.resolver';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { FeeManagementResolver } from './fee-management/fee-management.resolver'
       }),
     }),
     TypeOrmModule.forFeature(entities),
+    UploadModule,
   ],
   controllers: [],
   providers: [

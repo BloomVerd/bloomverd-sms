@@ -4,7 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { FileUpload } from 'graphql-upload';
+import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider';
+import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
 import { ILike, Repository } from 'typeorm';
 import {
   Class,
@@ -22,7 +26,7 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
-import { Gender, SemesterStatus } from '../../../shared/enums';
+import { FileType, Gender, SemesterStatus } from '../../../shared/enums';
 import {
   getDateValidationError,
   getEmailValidationError,
@@ -35,7 +39,6 @@ import {
   CreateClassWithRelationshipInput,
   CreateCollegeInput,
   CreateCourseInput,
-  CreateCourseMaterialInput,
   CreateCourseWithRelationshipInput,
   CreateDepartmentInput,
   CreateDepartmentWithRelationshipInput,
@@ -56,8 +59,6 @@ import {
   ValidationResponseType,
 } from '../../../shared/types';
 import { OrgProducer } from './org.producer';
-import { last } from 'rxjs';
-import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
 
 @Injectable()
 export class OrgService {
@@ -89,6 +90,8 @@ export class OrgService {
     private courseExamRepository: Repository<CourseExam>,
     @InjectRepository(CourseExamResult)
     private courseExamResultRepository: Repository<CourseExamResult>,
+    private readonly uploadToAwsProvider: UploadToAwsProvider,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -1631,11 +1634,11 @@ export class OrgService {
   async uploadCourseMaterial({
     organizationEmail,
     courseId,
-    materials,
+    files,
   }: {
     organizationEmail: string;
     courseId: string;
-    materials: CreateCourseMaterialInput[];
+    files: FileUpload[];
   }) {
     return await this.courseRepository.manager.transaction(
       async (transactionalEntityManager) => {
@@ -1658,23 +1661,52 @@ export class OrgService {
           },
         });
 
-        this.logger.log(`Course found: ${course?.id}`);
-
         if (!course) {
           this.logger.error('Course not found!');
           throw new BadRequestException('Course not found!');
         }
 
         const new_course_materials: CourseMaterial[] = await Promise.all(
-          materials.map(async (material) => {
+          files.map(async (file) => {
+            // Read the file stream and convert to buffer
+            const { createReadStream, filename, mimetype } = await file;
+            const stream = createReadStream();
+            const chunks: Buffer[] = [];
+
+            for await (const chunk of stream) {
+              chunks.push(chunk);
+            }
+
+            const buffer = Buffer.concat(chunks);
+
+            // Create file object for AWS upload
+            const fileForUpload = {
+              buffer,
+              originalname: filename,
+              mimetype,
+              size: buffer.length,
+            } as Express.Multer.File;
+
+            // Upload to AWS
+            const path =
+              await this.uploadToAwsProvider.fileupload(fileForUpload);
+
+            // Create CloudFront URL
+            const cloudfront_url = `https://${this.configService.get<string>('AWS_CLOUDFRONT_URL')}/${path}`;
+
+            // Create the material entity
             const new_course_material = new CourseMaterial();
-            new_course_material.name = material.materialName;
-            new_course_material.url = material.materialUrl;
+            new_course_material.name = path;
+            new_course_material.url = cloudfront_url;
+            new_course_material.mime = mimetype;
+            new_course_material.size = buffer.length;
+            new_course_material.type = this.getFileType(mimetype);
             new_course_material.course = course;
 
             return new_course_material;
           }),
         );
+
         this.logger.log(
           `Uploaded materials for course: ${course.id} successfully`,
         );
@@ -1682,6 +1714,27 @@ export class OrgService {
         return transactionalEntityManager.save(new_course_materials);
       },
     );
+  }
+
+  private getFileType(mimetype: string): FileType {
+    if (mimetype.startsWith('image/')) {
+      return FileType.IMAGE;
+    } else if (mimetype.startsWith('video/')) {
+      return FileType.VIDEO;
+    } else if (mimetype.startsWith('audio/')) {
+      return FileType.AUDIO;
+    } else if (mimetype.includes('pdf')) {
+      return FileType.PDF;
+    } else if (
+      mimetype.includes(
+        'vnd.openxmlformats-officedocument.presentationml.presentation',
+      ) ||
+      mimetype.includes('vnd.ms-powerpoint')
+    ) {
+      return FileType.PPT;
+    } else {
+      return FileType.DOCUMENT;
+    }
   }
 
   async addOrganizationIEC({

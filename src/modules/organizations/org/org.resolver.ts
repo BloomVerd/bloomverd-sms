@@ -1,5 +1,6 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { FileUpload, GraphQLUpload } from 'graphql-upload';
 import {
   ClassTypeClass,
   CollegeTypeClass,
@@ -7,7 +8,6 @@ import {
   CourseTypeClass,
   DepartmentTypeClass,
   FacultyTypeClass,
-  FeeTypeClass,
   IecTypeClass,
   SemesterTypeClass,
   StudentTypeClass,
@@ -18,7 +18,6 @@ import {
   CreateClassWithRelationshipInput,
   CreateCollegeInput,
   CreateCourseInput,
-  CreateCourseMaterialInput,
   CreateCourseWithRelationshipInput,
   CreateDepartmentInput,
   CreateDepartmentWithRelationshipInput,
@@ -47,21 +46,6 @@ import { OrgService } from './org.service';
 @Resolver()
 export class OrgResolver {
   constructor(private readonly orgService: OrgService) {}
-
-  @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CollegeTypeClass])
-  createColleges(
-    @Context() context: { req: { user: { email: string } } },
-    @Args('colleges', { type: () => [CreateCollegeInput!]!, nullable: false })
-    colleges: CreateCollegeInput[],
-  ) {
-    const { email } = context.req.user;
-
-    return this.orgService.createColleges({
-      organizationEmail: email,
-      colleges,
-    });
-  }
 
   @UseGuards(GqlJwtAuthGuard)
   @Query(() => [ValidationResponseType])
@@ -235,18 +219,15 @@ export class OrgResolver {
     @Context() context: { req: { user: { email: string } } },
     @Args('courseId', { type: () => String!, nullable: false })
     courseId: string,
-    @Args('materials', {
-      type: () => [CreateCourseMaterialInput!]!,
-      nullable: false,
-    })
-    materials: CreateCourseMaterialInput[],
+    @Args('files', { type: () => [GraphQLUpload!]!, nullable: false })
+    files: FileUpload[],
   ) {
     const { email } = context.req.user;
 
     return this.orgService.uploadCourseMaterial({
       organizationEmail: email,
       courseId,
-      materials,
+      files,
     });
   }
 

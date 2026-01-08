@@ -9,4 +9,6 @@ export const configValidationSchema = Joi.object({
   DB_PORT: Joi.number().required(),
   REDIS_URL: Joi.string().required(),
   JWT_SECRET: Joi.string().required(),
+  AWS_PUBLIC_BUCKET_NAME: Joi.string().required(),
+  AWS_CLOUDFRONT_URL: Joi.string().required(),
 });

@@ -1,3 +1,4 @@
+import { FileType } from 'src/shared/enums';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Course } from './course.entity';
 
@@ -8,6 +9,19 @@ export class CourseMaterial {
 
   @Column()
   name: string;
+
+  @Column({
+    type: 'enum',
+    enum: FileType,
+    default: FileType.IMAGE,
+  })
+  type: FileType;
+
+  @Column()
+  mime: string;
+
+  @Column()
+  size: number;
 
   @Column()
   url: string;

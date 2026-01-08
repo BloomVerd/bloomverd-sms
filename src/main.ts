@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { graphqlUploadExpress } from 'graphql-upload';
 import { Client } from 'pg';
 import { AppModule } from './app.module';
 
@@ -37,11 +38,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('APP_PORT') || 3000;
 
-  app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN') || '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
+  app.use(
+    '/graphql',
+    graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 10 }),
+  );
 
   app.enableCors({
     origin: configService.get<string>('CORS_ORIGIN') || '*',
