@@ -8,12 +8,20 @@ import {
   CourseTypeClass,
   DepartmentTypeClass,
   FacultyTypeClass,
+  FeeTypeClass,
   IecTypeClass,
+  LecturerTypeClass,
   SemesterTypeClass,
   StudentTypeClass,
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
+  AddClassInput,
+  AddCollegeInput,
+  AddDepartmentInput,
+  AddFacultyInput,
+  AddLecturerInput,
+  AddStudentInput,
   CreateClassInput,
   CreateClassWithRelationshipInput,
   CreateCollegeInput,
@@ -31,11 +39,13 @@ import {
   OrganizationCourseFilterInput,
   OrganizationDepartmentFilterInput,
   OrganizationFacultyFilterInput,
+  OrganizationLecturerFilterInput,
   OrganizationStudentFilterInput,
   UploadExamResultsInput,
 } from '../../../shared/inputs';
 import {
   FeeConnection,
+  LecturerConnection,
   RegisterResponseType,
   StudentConnection,
   UploadExamResultsResponseType,
@@ -291,6 +301,30 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
+  @Query(() => LecturerConnection)
+  listOrganizationLecturers(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('searchTerm', { type: () => String, nullable: true })
+    searchTerm?: string,
+    @Args('page', { type: () => Int, nullable: true }) page?: number,
+    @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+    @Args('filter', {
+      nullable: true,
+    })
+    filter?: OrganizationLecturerFilterInput,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.listOrganizationLecturers({
+      email,
+      searchTerm,
+      page,
+      limit,
+      filter,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
   @Query(() => StudentTypeClass)
   getOrganizationStudent(
     @Context() context: { req: { user: { email: string } } },
@@ -302,6 +336,36 @@ export class OrgResolver {
     return this.orgService.getOrganizationStudent({
       email,
       studentId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => LecturerTypeClass)
+  getOrganizationLecturer(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('lecturerId', { type: () => String, nullable: false })
+    lecturerId: string,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationLecturer({
+      email,
+      lecturerId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => FeeTypeClass)
+  getOrganizationFee(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('feeId', { type: () => String, nullable: false })
+    feeId: string,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.getOrganizationFee({
+      email,
+      feeId,
     });
   }
 
@@ -421,8 +485,6 @@ export class OrgResolver {
   @Mutation(() => UploadExamResultsResponseType)
   uploadExamResultsFromOrganization(
     @Context() context: { req: { user: { email: string } } },
-    @Args('organizationEmail', { type: () => String!, nullable: false })
-    organizationEmail: string,
     @Args('results', {
       type: () => [UploadExamResultsInput!]!,
       nullable: false,
@@ -431,80 +493,131 @@ export class OrgResolver {
   ) {
     const { email } = context.req.user;
     return this.orgService.uploadExamResultsFromOrganization({
-      organizationEmail,
+      organizationEmail: email,
       results,
     });
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass])
+  @Mutation(() => [CollegeTypeClass])
   addOrganizationColleges(
     @Context() context: { req: { user: { email: string } } },
     @Args('colleges', {
-      type: () => [CreateCollegeInput!],
+      type: () => [AddCollegeInput!],
       nullable: true,
     })
-    colleges: CreateCollegeInput[],
+    colleges: AddCollegeInput[],
   ) {
     const { email } = context.req.user;
 
-    return this.orgService.createColleges({
+    return this.orgService.addOrganizationColleges({
       organizationEmail: email,
       colleges,
     });
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass])
+  @Mutation(() => [FacultyTypeClass])
   addOrganizationFaculties(
     @Context() context: { req: { user: { email: string } } },
     @Args('faculties', {
-      type: () => [CreateFacultyWithRelationshipInput!],
+      type: () => [AddFacultyInput!],
       nullable: true,
     })
-    faculties: CreateFacultyWithRelationshipInput[],
+    faculties: AddFacultyInput[],
+    @Args('collegeId', { type: () => String!, nullable: false })
+    collegeId: string,
   ) {
     const { email } = context.req.user;
 
-    return this.orgService.createFaculties({
+    return this.orgService.addOrganizationFaculties({
       organizationEmail: email,
       faculties,
+      collegeId,
     });
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass])
+  @Mutation(() => [FacultyTypeClass])
+  addOrganizationDepartments(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('departments', {
+      type: () => [AddDepartmentInput!],
+      nullable: true,
+    })
+    departments: AddDepartmentInput[],
+    @Args('facultyId', { type: () => String!, nullable: false })
+    facultyId: string,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.addOrganizationDepartments({
+      organizationEmail: email,
+      departments,
+      facultyId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [ClassTypeClass])
   addOrganizationClasses(
     @Context() context: { req: { user: { email: string } } },
     @Args('classes', {
-      type: () => [CreateClassWithRelationshipInput!],
+      type: () => [AddClassInput!],
       nullable: true,
     })
-    classes: CreateClassWithRelationshipInput[],
+    classes: AddClassInput[],
+    @Args('departmentId', { type: () => String!, nullable: false })
+    departmentId: string,
   ) {
     const { email } = context.req.user;
 
-    return this.orgService.createClasses({
+    return this.orgService.addOrganizationClasses({
       organizationEmail: email,
       classes,
+      departmentId,
     });
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass])
+  @Mutation(() => [StudentTypeClass])
   addOrganizationStudents(
     @Context() context: { req: { user: { email: string } } },
     @Args('students', {
-      type: () => [CreateStudentWithRelationshipInput!],
+      type: () => [AddStudentInput!],
       nullable: true,
     })
-    students: CreateStudentWithRelationshipInput[],
+    students: AddStudentInput[],
+    @Args('classId', { type: () => String!, nullable: false })
+    classId: string,
   ) {
     const { email } = context.req.user;
 
-    return this.orgService.createStudents({
+    return this.orgService.addOrganizationStudents({
       organizationEmail: email,
       students,
+      classId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => [StudentTypeClass])
+  addOrganizationLecturers(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('lecturers', {
+      type: () => [AddLecturerInput!],
+      nullable: true,
+    })
+    lecturers: AddLecturerInput[],
+    @Args('departmentId', { type: () => String!, nullable: false })
+    departmentId: string,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.addOrganizationLecturers({
+      organizationEmail: email,
+      lecturers,
+      departmentId,
     });
   }
 }

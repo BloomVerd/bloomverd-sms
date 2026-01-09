@@ -9,3 +9,4 @@ export * from './upload-exam-results-response.type';
 export * from './validation-response.type';
 export * from './fee-connection.type';
 export * from './student-connection.type';
+export * from './lecturer-connection.type';

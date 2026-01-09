@@ -1,4 +1,5 @@
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { FacultyTypeClass } from './faculty.type';
 
 export enum CurrencyType {
   USD = 'USD',
@@ -57,4 +58,10 @@ export class FeeTypeClass {
 
   @Field(() => LevelType)
   level: LevelType;
+
+  @Field()
+  year_group: number;
+
+  @Field(() => [FacultyTypeClass], { nullable: true })
+  faculty: FacultyTypeClass;
 }
