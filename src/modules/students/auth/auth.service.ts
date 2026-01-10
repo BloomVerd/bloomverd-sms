@@ -118,6 +118,11 @@ export class AuthService {
         this.metricsService.trackAuthenticationSuccess('login', 'student');
         this.metricsService.incrementActiveSessions();
 
+        this.logger.log(
+          `Login successful for student: ${email} (ID: ${student.id})`,
+          'StudentAuth',
+        );
+
         return {
           ...student,
           token: access_token,
@@ -134,6 +139,10 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(refresh_token);
 
       if (payload.type !== 'refresh_token') {
+        this.logger.warn(
+          'Refresh token verification failed: Invalid token type',
+          'StudentAuth',
+        );
         this.metricsService.trackAuthenticationFailure(
           'refresh_token',
           'invalid_token_type',
@@ -147,6 +156,10 @@ export class AuthService {
       });
 
       if (!student) {
+        this.logger.warn(
+          `Refresh token verification failed: Student not found (ID: ${payload.id})`,
+          'StudentAuth',
+        );
         this.metricsService.trackAuthenticationFailure(
           'refresh_token',
           'student_not_found',
@@ -196,6 +209,11 @@ export class AuthService {
       this.metricsService.trackAuthenticationSuccess(
         'refresh_token',
         'student',
+      );
+
+      this.logger.log(
+        `Refresh token verified successfully for student: ${student.email}`,
+        'StudentAuth',
       );
 
       return {
