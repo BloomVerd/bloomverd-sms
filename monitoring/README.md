@@ -1,6 +1,10 @@
 # Bloomverd SMS - Monitoring & Observability
 
-This directory contains the configuration for Prometheus and Grafana monitoring stack.
+This directory contains the configuration for the complete observability stack:
+- **Prometheus** - Metrics collection
+- **Grafana** - Visualization
+- **Loki** - Log aggregation
+- **Promtail** - Log shipping
 
 ## Quick Start
 
@@ -9,6 +13,13 @@ This directory contains the configuration for Prometheus and Grafana monitoring 
 ```bash
 docker-compose -f docker-compose.monitoring.yml up -d
 ```
+
+This starts:
+- Prometheus (port 9090)
+- Grafana (port 3001)
+- Loki (port 3100)
+- Promtail (log shipper)
+- Node Exporter (port 9100)
 
 ### 2. Start your NestJS application
 
@@ -22,6 +33,7 @@ npm run start:dev
 - **Grafana**: http://localhost:3001
   - Username: `admin`
   - Password: `admin`
+- **Loki**: http://localhost:3100 (API only)
 
 ## What's Being Monitored
 
@@ -70,11 +82,48 @@ The default Grafana dashboard includes:
 9. CPU Usage
 10. Event Loop Lag
 
-## Metrics Endpoint
+## Endpoints
 
-Your application exposes metrics at: `http://localhost:3000/metrics`
+- **Metrics**: http://localhost:3000/metrics (Prometheus format)
+- **Logs**: `logs/combined.log` and `logs/error.log` (JSON format)
 
-You can view raw Prometheus metrics by visiting this endpoint in your browser.
+## Dashboards
+
+Grafana comes with two pre-configured dashboards:
+
+1. **Bloomverd SMS - API Monitoring**
+   - Metrics dashboard
+   - HTTP/GraphQL performance
+   - Database queries
+   - Error rates
+
+2. **Bloomverd SMS - Logs**
+   - Log volume by level
+   - Error logs
+   - Logs by context
+   - Real-time log viewer
+
+## Viewing Logs in Grafana
+
+See [LOGS-QUICKSTART.md](./LOGS-QUICKSTART.md) for detailed instructions.
+
+### Quick Log Queries
+
+In Grafana **Explore** (select Loki datasource):
+
+```
+# All logs
+{job="bloomverd-sms"}
+
+# Errors only
+{job="bloomverd-sms", level="error"}
+
+# HTTP requests
+{job="bloomverd-sms", context="HTTP"}
+
+# Search for user
+{job="bloomverd-sms"} | json | userId="user-123"
+```
 
 ## Custom Metrics
 

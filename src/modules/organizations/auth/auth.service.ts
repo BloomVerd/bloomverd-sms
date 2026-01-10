@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,19 +9,21 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrganizationSetting } from 'src/database/entities/organization_setting.entity';
 import { HashHelper } from 'src/shared/helpers';
+import { AppLoggerService } from 'src/shared/services/logger.service';
+import { MetricsService } from 'src/shared/services/metrics.service';
 import { OrganizationLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
 import { Organization } from '../../../database/entities';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     @InjectRepository(Organization)
     private organizationRepository: Repository<Organization>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private metricsService: MetricsService,
+    private logger: AppLoggerService,
   ) {}
 
   async registerOrganization({
@@ -44,6 +45,10 @@ export class AuthService {
         );
 
         if (existingOrganization) {
+          this.logger.warn(
+            `Registration failed: Organization with email ${email} already exists`,
+            'OrganizationAuth',
+          );
           throw new Error('Organization with this email already exists');
         }
 
@@ -58,6 +63,14 @@ export class AuthService {
 
         await transactionalEntityManager.save(Organization, organization);
 
+        // Track organization creation
+        this.metricsService.trackOrganizationCreated('standard');
+
+        this.logger.log(
+          `Organization registered successfully: ${email}`,
+          'OrganizationAuth',
+        );
+
         return { message: 'Organization registered successfully' };
       },
     );
@@ -70,6 +83,12 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<OrganizationLoginResponse> {
+    this.logger.log(
+      `Login attempt for organization: ${email}`,
+      'OrganizationAuth',
+    );
+    this.metricsService.trackAuthenticationAttempt('login', 'organization');
+
     return await this.organizationRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const organization = await transactionalEntityManager.findOne(
@@ -80,6 +99,15 @@ export class AuthService {
         );
 
         if (!organization) {
+          this.logger.warn(
+            `Login failed: Organization not found for email ${email}`,
+            'OrganizationAuth',
+          );
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_email',
+            'organization',
+          );
           throw new BadRequestException('Email or password is incorrect');
         }
 
@@ -89,6 +117,15 @@ export class AuthService {
         );
 
         if (!isPasswordValid) {
+          this.logger.warn(
+            `Login failed: Invalid password for organization ${email}`,
+            'OrganizationAuth',
+          );
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_password',
+            'organization',
+          );
           throw new BadRequestException('Email or password is incorrect');
         }
 
@@ -130,6 +167,14 @@ export class AuthService {
           },
         );
 
+        this.metricsService.trackAuthenticationSuccess('login', 'organization');
+        this.metricsService.incrementActiveSessions();
+
+        this.logger.log(
+          `Login successful for organization: ${email} (ID: ${organization.id})`,
+          'OrganizationAuth',
+        );
+
         return {
           ...organization,
           token: access_token,
@@ -140,10 +185,24 @@ export class AuthService {
   }
 
   async verifyRefreshToken({ refresh_token }: { refresh_token: string }) {
+    this.logger.log('Refresh token verification attempt', 'OrganizationAuth');
+    this.metricsService.trackAuthenticationAttempt(
+      'refresh_token',
+      'organization',
+    );
     try {
       const payload = await this.jwtService.verifyAsync(refresh_token);
 
       if (payload.type !== 'refresh_token') {
+        this.logger.warn(
+          'Refresh token verification failed: Invalid token type',
+          'OrganizationAuth',
+        );
+        this.metricsService.trackAuthenticationFailure(
+          'refresh_token',
+          'invalid_token_type',
+          'organization',
+        );
         throw new UnauthorizedException('Invalid token type');
       }
 
@@ -152,6 +211,15 @@ export class AuthService {
       });
 
       if (!organization) {
+        this.logger.warn(
+          `Refresh token verification failed: Organization not found (ID: ${payload.id})`,
+          'OrganizationAuth',
+        );
+        this.metricsService.trackAuthenticationFailure(
+          'refresh_token',
+          'organization_not_found',
+          'organization',
+        );
         throw new NotFoundException('Organization not found');
       }
 
@@ -193,13 +261,31 @@ export class AuthService {
         },
       );
 
+      this.metricsService.trackAuthenticationSuccess(
+        'refresh_token',
+        'organization',
+      );
+
+      this.logger.log(
+        `Refresh token verified successfully for organization: ${organization.email}`,
+        'OrganizationAuth',
+      );
+
       return {
         ...organization,
         token: access_token,
         refresh_token: refresh_token_generated,
       };
     } catch (error) {
-      this.logger.error('Invalid refresh token', JSON.stringify(error));
+      this.metricsService.trackAuthenticationFailure(
+        'refresh_token',
+        'invalid_token',
+        'organization',
+      );
+      this.logger.error(
+        `Refresh token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'OrganizationAuth',
+      );
       throw new BadRequestException('Invalid refresh token', error);
     }
   }

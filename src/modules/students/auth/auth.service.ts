@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,19 +11,21 @@ import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
 import { HashHelper } from '../../../shared/helpers';
+import { AppLoggerService } from '../../../shared/services/logger.service';
+import { MetricsService } from '../../../shared/services/metrics.service';
 import { StudentLoginResponse } from '../../../shared/types';
 import { AuthProducer } from './auth.producer';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     @InjectRepository(Student)
     private readonly studentRepository: Repository<Student>,
     private jwtService: JwtService,
     private readonly authProducer: AuthProducer,
     private readonly configService: ConfigService,
+    private readonly metricsService: MetricsService,
+    private readonly logger: AppLoggerService,
   ) {}
 
   async loginStudent({
@@ -34,6 +35,9 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<StudentLoginResponse> {
+    this.logger.log(`Login attempt for student: ${email}`, 'StudentAuth');
+    this.metricsService.trackAuthenticationAttempt('login', 'student');
+
     return await this.studentRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const student = await transactionalEntityManager.findOne(Student, {
@@ -43,6 +47,15 @@ export class AuthService {
         });
 
         if (!student) {
+          this.logger.warn(
+            `Login failed: Student not found for email ${email}`,
+            'StudentAuth',
+          );
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_email',
+            'student',
+          );
           throw new BadRequestException('Email or password is incorrect');
         }
 
@@ -51,8 +64,18 @@ export class AuthService {
           student.password || '',
         );
 
-        if (!isPasswordValid)
+        if (!isPasswordValid) {
+          this.logger.warn(
+            `Login failed: Invalid password for student ${email}`,
+            'StudentAuth',
+          );
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_password',
+            'student',
+          );
           throw new BadRequestException('Email or password is incorrect');
+        }
 
         const access_token_payload: {
           id: string;
@@ -92,6 +115,9 @@ export class AuthService {
           },
         );
 
+        this.metricsService.trackAuthenticationSuccess('login', 'student');
+        this.metricsService.incrementActiveSessions();
+
         return {
           ...student,
           token: access_token,
@@ -102,10 +128,17 @@ export class AuthService {
   }
 
   async verifyRefreshToken({ refresh_token }: { refresh_token: string }) {
+    this.metricsService.trackAuthenticationAttempt('refresh_token', 'student');
+
     try {
       const payload = await this.jwtService.verifyAsync(refresh_token);
 
       if (payload.type !== 'refresh_token') {
+        this.metricsService.trackAuthenticationFailure(
+          'refresh_token',
+          'invalid_token_type',
+          'student',
+        );
         throw new UnauthorizedException('Invalid token');
       }
 
@@ -114,6 +147,11 @@ export class AuthService {
       });
 
       if (!student) {
+        this.metricsService.trackAuthenticationFailure(
+          'refresh_token',
+          'student_not_found',
+          'student',
+        );
         throw new NotFoundException('Student not found');
       }
 
@@ -155,12 +193,22 @@ export class AuthService {
         },
       );
 
+      this.metricsService.trackAuthenticationSuccess(
+        'refresh_token',
+        'student',
+      );
+
       return {
         ...student,
         token: access_token,
         refresh_token: refresh_token_generated,
       };
     } catch (error) {
+      this.metricsService.trackAuthenticationFailure(
+        'refresh_token',
+        'invalid_token',
+        'student',
+      );
       this.logger.error('Invalid refresh token', JSON.stringify(error));
       throw new BadRequestException('Invalid refresh token', error);
     }

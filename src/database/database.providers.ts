@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { DatabaseQueryLogger } from '../shared/interceptors/database-query.logger';
 
 /**
  * Setup default connection in the application
@@ -8,6 +9,7 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
  */
 const defaultPostgresDBConnection = (
   configService: ConfigService,
+  queryLogger: DatabaseQueryLogger,
 ): TypeOrmModuleOptions => ({
   type: 'postgres',
   autoLoadEntities: true,
@@ -19,6 +21,9 @@ const defaultPostgresDBConnection = (
   ssl: {
     rejectUnauthorized: false, // allow self-signed AWS certs
   },
+  logging: true,
+  logger: queryLogger,
+  maxQueryExecutionTime: 1000, // Log queries slower than 1 second
 });
 
 const defaultRedisDBConnection = async (configService: ConfigService) => ({
@@ -30,7 +35,7 @@ const defaultRedisDBConnection = async (configService: ConfigService) => ({
 export const databaseProviders = [
   TypeOrmModule.forRootAsync({
     imports: [ConfigModule],
-    inject: [ConfigService],
+    inject: [ConfigService, DatabaseQueryLogger],
     useFactory: defaultPostgresDBConnection,
   }),
   BullModule.forRootAsync({

@@ -1,139 +1,627 @@
 {
   "dashboard": {
     "title": "Bloomverd SMS - API Monitoring",
-    "tags": ["nestjs", "graphql", "api"],
+    "tags": ["nestjs", "graphql", "api", "sms"],
     "timezone": "browser",
     "editable": true,
     "panels": [
       {
-        "id": 1,
-        "title": "HTTP Requests Per Second",
-        "type": "graph",
-        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "id": 100,
+        "title": "Overview Stats",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 101,
+        "title": "Total Requests",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
         "targets": [
           {
-            "expr": "rate(http_requests_total[5m])",
-            "legendFormat": "{{method}} {{path}}",
+            "expr": "sum(increase(http_requests_total[24h]))",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "reqps", "label": "Requests/sec" },
-          { "format": "short" }
-        ]
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{ "color": "green", "value": null }]
+            }
+          }
+        }
+      },
+      {
+        "id": 102,
+        "title": "Auth Success Rate",
+        "type": "gauge",
+        "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(authentication_successes_total[5m])) / sum(rate(authentication_attempts_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 90 },
+                { "color": "green", "value": 95 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 103,
+        "title": "Active Sessions",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "active_sessions",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{ "color": "green", "value": null }]
+            }
+          }
+        }
+      },
+      {
+        "id": 104,
+        "title": "DB Connections",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "db_connections_active",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 80 },
+                { "color": "red", "value": 95 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 105,
+        "title": "SMS Sent (24h)",
+        "type": "stat",
+        "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(increase(sms_sent_total[24h]))",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [{ "color": "green", "value": null }]
+            }
+          }
+        }
+      },
+      {
+        "id": 106,
+        "title": "Error Rate",
+        "type": "stat",
+        "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+        "targets": [
+          {
+            "expr": "sum(rate(application_errors_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 1,
+        "title": "HTTP Requests",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+        "collapsed": false
       },
       {
         "id": 2,
-        "title": "HTTP Request Duration (95th percentile)",
-        "type": "graph",
-        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "title": "HTTP Requests Per Second",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{method}} {{path}} - p95",
+            "expr": "sum(rate(http_requests_total[5m])) by (method, status_code)",
+            "legendFormat": "{{method}} - {{status_code}}",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "s", "label": "Duration" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
       },
       {
         "id": 3,
-        "title": "GraphQL Queries Per Second",
-        "type": "graph",
-        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "title": "HTTP Request Duration (P50, P95, P99)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "rate(graphql_queries_total[5m])",
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "GraphQL Operations",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 5,
+        "title": "GraphQL Queries Per Second",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(graphql_queries_total[5m])) by (operation)",
             "legendFormat": "{{operation}}",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "reqps", "label": "Queries/sec" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
       },
       {
-        "id": 4,
-        "title": "GraphQL Query Duration (95th percentile)",
-        "type": "graph",
-        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "id": 6,
+        "title": "GraphQL Query Duration (P95)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(graphql_query_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{operation}} - p95",
+            "expr": "histogram_quantile(0.95, sum(rate(graphql_query_duration_seconds_bucket[5m])) by (le, operation))",
+            "legendFormat": "{{operation}} - P95",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "s", "label": "Duration" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
       },
       {
-        "id": 5,
+        "id": 7,
         "title": "GraphQL Error Rate",
-        "type": "graph",
-        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 23, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "rate(graphql_errors_total[5m])",
+            "expr": "sum(rate(graphql_errors_total[5m])) by (operation, error_type)",
             "legendFormat": "{{operation}} - {{error_type}}",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "errors/sec", "label": "Errors/sec" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
       },
       {
-        "id": 6,
+        "id": 8,
+        "title": "Database Operations",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 31, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 9,
         "title": "Database Queries Per Second",
-        "type": "graph",
-        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "rate(db_queries_total[5m])",
+            "expr": "sum(rate(db_queries_total[5m])) by (query_type)",
             "legendFormat": "{{query_type}}",
             "refId": "A"
           }
         ],
-        "yaxes": [
-          { "format": "qps", "label": "Queries/sec" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "qps"
+          }
+        }
       },
       {
-        "id": 7,
-        "title": "Authentication Success vs Failures",
-        "type": "graph",
-        "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+        "id": 10,
+        "title": "Database Query Duration (P95)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "rate(authentication_attempts_total[5m])",
+            "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, query_type))",
+            "legendFormat": "{{query_type}} - P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Authentication",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 40, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 12,
+        "title": "Authentication Attempts",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 41, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(authentication_attempts_total[5m])) by (method, provider)",
+            "legendFormat": "{{method}} ({{provider}})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Authentication Successes vs Failures",
+        "type": "timeseries",
+        "gridPos": { "x": 8, "y": 41, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(authentication_successes_total[5m])) by (method)",
             "legendFormat": "Success - {{method}}",
             "refId": "A"
           },
           {
-            "expr": "rate(authentication_failures_total[5m])",
+            "expr": "sum(rate(authentication_failures_total[5m])) by (method)",
             "legendFormat": "Failure - {{method}}",
             "refId": "B"
           }
         ],
-        "yaxes": [
-          { "format": "ops", "label": "Attempts/sec" },
-          { "format": "short" }
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Authentication Failure Reasons",
+        "type": "piechart",
+        "gridPos": { "x": 16, "y": 41, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(authentication_failures_total[24h])) by (reason)",
+            "legendFormat": "{{reason}}",
+            "refId": "A"
+          }
         ]
       },
       {
-        "id": 8,
+        "id": 15,
+        "title": "SMS Messaging",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 49, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 16,
+        "title": "SMS Messages Sent",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 50, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(sms_sent_total[5m])) by (provider, message_type)",
+            "legendFormat": "{{provider}} - {{message_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 17,
+        "title": "SMS Failures",
+        "type": "timeseries",
+        "gridPos": { "x": 8, "y": 50, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(sms_failed_total[5m])) by (provider, reason)",
+            "legendFormat": "{{provider}} - {{reason}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 18,
+        "title": "SMS Delivery Duration (P95)",
+        "type": "timeseries",
+        "gridPos": { "x": 16, "y": 50, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(sms_delivery_duration_seconds_bucket[5m])) by (le, provider))",
+            "legendFormat": "{{provider}} - P95",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 19,
+        "title": "Entity Operations",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 58, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 20,
+        "title": "Users Created",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 59, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(users_created_total[5m])) by (role)",
+            "legendFormat": "{{role}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 21,
+        "title": "Students Created",
+        "type": "timeseries",
+        "gridPos": { "x": 8, "y": 59, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(students_created_total[5m]))",
+            "legendFormat": "Students",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 22,
+        "title": "Organizations Created",
+        "type": "timeseries",
+        "gridPos": { "x": 16, "y": 59, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(organizations_created_total[5m])) by (type)",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 23,
+        "title": "File Uploads & Cache",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 67, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 24,
+        "title": "File Uploads",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 68, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(file_uploads_total[5m])) by (file_type, status)",
+            "legendFormat": "{{file_type}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 25,
+        "title": "File Upload Sizes (P50, P95)",
+        "type": "timeseries",
+        "gridPos": { "x": 8, "y": 68, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(file_upload_size_bytes_bucket[5m])) by (le))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(file_upload_size_bytes_bucket[5m])) by (le))",
+            "legendFormat": "P95",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
+      },
+      {
+        "id": 26,
+        "title": "Cache Hit Rate",
+        "type": "gauge",
+        "gridPos": { "x": 16, "y": 68, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 70 },
+                { "color": "green", "value": 90 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 27,
+        "title": "Errors & System",
+        "type": "row",
+        "gridPos": { "x": 0, "y": 76, "w": 24, "h": 1 },
+        "collapsed": false
+      },
+      {
+        "id": 28,
+        "title": "Application Errors",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 77, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(application_errors_total[5m])) by (error_type, context)",
+            "legendFormat": "{{error_type}} - {{context}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 29,
+        "title": "Errors by Type (24h)",
+        "type": "piechart",
+        "gridPos": { "x": 12, "y": 77, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(application_errors_total[24h])) by (error_type)",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 30,
         "title": "Memory Usage",
-        "type": "graph",
-        "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 85, "w": 12, "h": 8 },
         "targets": [
           {
             "expr": "nodejs_heap_size_used_bytes",
@@ -146,49 +634,39 @@
             "refId": "B"
           }
         ],
-        "yaxes": [
-          { "format": "bytes", "label": "Memory" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        }
       },
       {
-        "id": 9,
-        "title": "CPU Usage",
-        "type": "graph",
-        "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
+        "id": 31,
+        "title": "CPU & Event Loop",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 85, "w": 12, "h": 8 },
         "targets": [
           {
-            "expr": "rate(process_cpu_user_seconds_total[5m])",
-            "legendFormat": "User CPU",
+            "expr": "rate(process_cpu_user_seconds_total[5m]) * 100",
+            "legendFormat": "User CPU %",
             "refId": "A"
           },
           {
-            "expr": "rate(process_cpu_system_seconds_total[5m])",
-            "legendFormat": "System CPU",
+            "expr": "rate(process_cpu_system_seconds_total[5m]) * 100",
+            "legendFormat": "System CPU %",
             "refId": "B"
-          }
-        ],
-        "yaxes": [
-          { "format": "percent", "label": "CPU %" },
-          { "format": "short" }
-        ]
-      },
-      {
-        "id": 10,
-        "title": "Event Loop Lag",
-        "type": "graph",
-        "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
-        "targets": [
+          },
           {
-            "expr": "nodejs_eventloop_lag_seconds",
-            "legendFormat": "Event Loop Lag",
-            "refId": "A"
+            "expr": "nodejs_eventloop_lag_seconds * 1000",
+            "legendFormat": "Event Loop Lag (ms)",
+            "refId": "C"
           }
         ],
-        "yaxes": [
-          { "format": "s", "label": "Lag" },
-          { "format": "short" }
-        ]
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
       }
     ],
     "refresh": "10s",
@@ -196,6 +674,6 @@
       "from": "now-1h",
       "to": "now"
     },
-    "version": 1
+    "version": 2
   }
 }

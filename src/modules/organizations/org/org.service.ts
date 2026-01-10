@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FileUpload } from 'graphql-upload';
 import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider';
 import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
+import { MetricsService } from 'src/shared/services/metrics.service';
 import { ILike, Repository } from 'typeorm';
 import {
   Class,
@@ -99,6 +100,7 @@ export class OrgService {
     private courseExamResultRepository: Repository<CourseExamResult>,
     private readonly uploadToAwsProvider: UploadToAwsProvider,
     private readonly configService: ConfigService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   /**
@@ -1493,7 +1495,15 @@ export class OrgService {
           `Created ${new_students.length} student(s) successfully`,
         );
 
-        return transactionalEntityManager.save(new_students);
+        const savedStudents =
+          await transactionalEntityManager.save(new_students);
+
+        // Track student creation metrics
+        savedStudents.forEach(() => {
+          this.metricsService.trackStudentCreated();
+        });
+
+        return savedStudents;
       },
     );
   }
@@ -1565,7 +1575,15 @@ export class OrgService {
           `Created ${new_students.length} student(s) successfully`,
         );
 
-        return transactionalEntityManager.save(new_students);
+        const savedStudents =
+          await transactionalEntityManager.save(new_students);
+
+        // Track student creation metrics
+        savedStudents.forEach(() => {
+          this.metricsService.trackStudentCreated();
+        });
+
+        return savedStudents;
       },
     );
   }

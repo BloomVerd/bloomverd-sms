@@ -68,22 +68,71 @@ Created a centralized service to manage custom application metrics:
 
 #### Metrics Tracked
 
+##### HTTP Metrics
 | Metric Name | Type | Labels | Description |
 |------------|------|--------|-------------|
 | `http_requests_total` | Counter | method, path, status_code | Total HTTP requests |
 | `http_request_duration_seconds` | Histogram | method, path | HTTP request duration |
+
+##### GraphQL Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
 | `graphql_queries_total` | Counter | operation | Total GraphQL queries |
 | `graphql_query_duration_seconds` | Histogram | operation | GraphQL query duration |
 | `graphql_errors_total` | Counter | operation, error_type | GraphQL errors |
+
+##### Database Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
 | `db_queries_total` | Counter | query_type | Database queries |
 | `db_query_duration_seconds` | Histogram | query_type | Database query duration |
-| `authentication_attempts_total` | Counter | method | Successful authentications |
-| `authentication_failures_total` | Counter | method | Failed authentications |
+| `db_connections_active` | Gauge | - | Active database connections |
+
+##### Authentication Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `authentication_attempts_total` | Counter | method, provider | Total authentication attempts |
+| `authentication_successes_total` | Counter | method, provider | Successful authentications |
+| `authentication_failures_total` | Counter | method, reason, provider | Failed authentications |
+| `active_sessions` | Gauge | - | Currently active user sessions |
+
+##### SMS Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `sms_sent_total` | Counter | provider, message_type | SMS messages sent |
+| `sms_failed_total` | Counter | provider, reason | Failed SMS messages |
+| `sms_delivery_duration_seconds` | Histogram | provider | SMS delivery duration |
+
+##### Entity Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `users_created_total` | Counter | role | Users created |
+| `students_created_total` | Counter | organization_id | Students created |
+| `organizations_created_total` | Counter | type | Organizations created |
+
+##### File Upload Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `file_uploads_total` | Counter | file_type, status | File uploads |
+| `file_upload_size_bytes` | Histogram | file_type | Upload file sizes |
+
+##### Cache Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `cache_hits_total` | Counter | cache_type | Cache hits |
+| `cache_misses_total` | Counter | cache_type | Cache misses |
+
+##### Error Metrics
+| Metric Name | Type | Labels | Description |
+|------------|------|--------|-------------|
+| `application_errors_total` | Counter | error_type, context | Application errors |
 
 #### Histogram Buckets
 
-- **HTTP/GraphQL**: `[0.1, 0.5, 1, 2, 5]` seconds
-- **Database**: `[0.01, 0.05, 0.1, 0.5, 1]` seconds
+- **HTTP/GraphQL**: `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]` seconds
+- **Database**: `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1]` seconds
+- **SMS Delivery**: `[0.1, 0.5, 1, 2, 5, 10, 30]` seconds
+- **File Upload Size**: `[1KB, 10KB, 100KB, 1MB, 10MB, 100MB]`
 
 These buckets allow tracking of percentiles (p50, p95, p99).
 
@@ -346,9 +395,9 @@ docker-compose -f docker-compose.monitoring.yml down -v
 
 ---
 
-## Custom Metrics Example
+## Custom Metrics Usage Examples
 
-To track custom business metrics in your code:
+### Authentication Tracking
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -362,16 +411,165 @@ export class AuthService {
     try {
       const user = await this.validateUser(email, password);
       
-      // Track successful authentication
-      this.metricsService.trackAuthentication(true, 'jwt');
+      // Track successful authentication (tracks attempt + success)
+      this.metricsService.trackAuthentication(true, 'login', 'local');
+      this.metricsService.incrementActiveSessions();
       
       return user;
     } catch (error) {
-      // Track failed authentication
-      this.metricsService.trackAuthentication(false, 'jwt');
-      
+      // Track failed authentication with reason
+      this.metricsService.trackAuthentication(
+        false, 
+        'login', 
+        'local', 
+        'invalid_credentials'
+      );
       throw error;
     }
+  }
+
+  async logout(userId: string) {
+    // Decrement active sessions on logout
+    this.metricsService.decrementActiveSessions();
+  }
+}
+```
+
+### SMS Tracking
+
+```typescript
+@Injectable()
+export class SmsService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async sendSms(phone: string, message: string) {
+    const startTime = Date.now();
+    
+    try {
+      await this.smsProvider.send(phone, message);
+      
+      // Track successful SMS
+      this.metricsService.trackSmsSent('twilio', 'transactional');
+      this.metricsService.trackSmsDeliveryDuration(
+        'twilio', 
+        (Date.now() - startTime) / 1000
+      );
+    } catch (error) {
+      // Track failed SMS with reason
+      this.metricsService.trackSmsFailed('twilio', 'delivery_failed');
+      throw error;
+    }
+  }
+}
+```
+
+### Entity Creation Tracking
+
+```typescript
+@Injectable()
+export class UserService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async createUser(data: CreateUserDto) {
+    const user = await this.userRepository.save(data);
+    
+    // Track user creation by role
+    this.metricsService.trackUserCreated(user.role);
+    
+    return user;
+  }
+}
+
+@Injectable()
+export class StudentService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async createStudent(data: CreateStudentDto) {
+    const student = await this.studentRepository.save(data);
+    
+    // Track student creation by organization
+    this.metricsService.trackStudentCreated(student.organizationId);
+    
+    return student;
+  }
+}
+
+@Injectable()
+export class OrganizationService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async createOrganization(data: CreateOrgDto) {
+    const org = await this.orgRepository.save(data);
+    
+    // Track organization creation by type
+    this.metricsService.trackOrganizationCreated(org.type);
+    
+    return org;
+  }
+}
+```
+
+### File Upload Tracking
+
+```typescript
+@Injectable()
+export class FileUploadService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async uploadFile(file: Express.Multer.File) {
+    const fileType = this.getFileType(file.mimetype);
+    
+    try {
+      await this.s3Service.upload(file);
+      
+      // Track successful upload
+      this.metricsService.trackFileUpload(fileType, true);
+      this.metricsService.trackFileUploadSize(fileType, file.size);
+    } catch (error) {
+      // Track failed upload
+      this.metricsService.trackFileUpload(fileType, false);
+      throw error;
+    }
+  }
+}
+```
+
+### Cache Tracking
+
+```typescript
+@Injectable()
+export class CacheService {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  async get<T>(key: string): Promise<T | null> {
+    const value = await this.redis.get(key);
+    
+    if (value) {
+      this.metricsService.trackCacheHit('redis');
+      return JSON.parse(value);
+    }
+    
+    this.metricsService.trackCacheMiss('redis');
+    return null;
+  }
+}
+```
+
+### Error Tracking
+
+```typescript
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  constructor(private readonly metricsService: MetricsService) {}
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const errorType = this.getErrorType(exception);
+    const context = host.getType();
+    
+    // Track application error
+    this.metricsService.trackApplicationError(errorType, context);
+    
+    // ... handle error response
   }
 }
 ```
@@ -428,6 +626,9 @@ rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds
 
 # Error rate (5xx responses)
 rate(http_requests_total{status_code=~"5.."}[5m])
+
+# P95 latency
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
 ```
 
 ### GraphQL Metrics
@@ -448,6 +649,96 @@ sum by (query_type) (rate(db_queries_total[5m]))
 
 # Slowest query types
 topk(3, histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m])))
+
+# Active database connections
+db_connections_active
+```
+
+### Authentication Metrics
+
+```promql
+# Authentication success rate (percentage)
+sum(rate(authentication_successes_total[5m])) / sum(rate(authentication_attempts_total[5m])) * 100
+
+# Failed authentication attempts by reason
+sum by (reason) (rate(authentication_failures_total[5m]))
+
+# Authentication attempts by provider
+sum by (provider) (rate(authentication_attempts_total[5m]))
+
+# Current active sessions
+active_sessions
+
+# Failed logins in the last hour
+sum(increase(authentication_failures_total[1h]))
+```
+
+### SMS Metrics
+
+```promql
+# SMS send rate by provider
+sum by (provider) (rate(sms_sent_total[5m]))
+
+# SMS failure rate
+sum(rate(sms_failed_total[5m])) / sum(rate(sms_sent_total[5m])) * 100
+
+# SMS delivery latency (P95)
+histogram_quantile(0.95, sum(rate(sms_delivery_duration_seconds_bucket[5m])) by (le, provider))
+
+# Failed SMS by reason
+sum by (reason) (increase(sms_failed_total[24h]))
+```
+
+### Entity Metrics
+
+```promql
+# Users created by role
+sum by (role) (increase(users_created_total[24h]))
+
+# Students created per hour
+sum(rate(students_created_total[1h])) * 3600
+
+# Organization creation trend
+sum(increase(organizations_created_total[7d]))
+```
+
+### File Upload Metrics
+
+```promql
+# Upload success rate
+sum(rate(file_uploads_total{status="success"}[5m])) / sum(rate(file_uploads_total[5m])) * 100
+
+# Average file size by type
+histogram_quantile(0.5, sum(rate(file_upload_size_bytes_bucket[5m])) by (le, file_type))
+
+# Failed uploads
+sum by (file_type) (rate(file_uploads_total{status="failed"}[5m]))
+```
+
+### Cache Metrics
+
+```promql
+# Cache hit rate (percentage)
+sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m]))) * 100
+
+# Cache operations by type
+sum by (cache_type) (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))
+```
+
+### Error Metrics
+
+```promql
+# Error rate by type
+sum by (error_type) (rate(application_errors_total[5m]))
+
+# Errors by context (http, graphql)
+sum by (context) (rate(application_errors_total[5m]))
+
+# Total errors in last 24h
+sum(increase(application_errors_total[24h]))
+
+# Top error types
+topk(5, sum by (error_type) (increase(application_errors_total[1h])))
 ```
 
 ---
@@ -600,3 +891,4 @@ groups:
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-01-10 | Initial implementation | AI Assistant |
+| 2026-01-10 | Added comprehensive metrics: authentication (attempts/successes/failures), SMS, entity creation, file uploads, cache, errors | AI Assistant |

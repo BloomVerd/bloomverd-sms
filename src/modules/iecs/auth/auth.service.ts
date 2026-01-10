@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { HashHelper } from 'src/shared/helpers';
+import { MetricsService } from 'src/shared/services/metrics.service';
 import { IecLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
 import { Iec } from '../../../database/entities';
@@ -12,6 +13,7 @@ export class AuthService {
     @InjectRepository(Iec)
     private iecRepository: Repository<Iec>,
     private jwtService: JwtService,
+    private metricsService: MetricsService,
   ) {}
 
   async registerIEC({
@@ -52,6 +54,8 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<IecLoginResponse> {
+    this.metricsService.trackAuthenticationAttempt('login', 'iec');
+
     return this.iecRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const iec = await transactionalEntityManager.findOne(Iec, {
@@ -59,6 +63,11 @@ export class AuthService {
         });
 
         if (!iec) {
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_email',
+            'iec',
+          );
           throw new BadRequestException('Email or password is incorrect');
         }
 
@@ -68,6 +77,11 @@ export class AuthService {
         );
 
         if (!isPasswordValid) {
+          this.metricsService.trackAuthenticationFailure(
+            'login',
+            'invalid_password',
+            'iec',
+          );
           throw new BadRequestException('Email or password is incorrect');
         }
 
@@ -84,6 +98,9 @@ export class AuthService {
         };
 
         const access_token = this.jwtService.sign(payload);
+
+        this.metricsService.trackAuthenticationSuccess('login', 'iec');
+        this.metricsService.incrementActiveSessions();
 
         return {
           ...iec,

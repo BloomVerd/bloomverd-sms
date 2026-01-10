@@ -1,0 +1,157 @@
+{
+  "dashboard": {
+    "title": "Bloomverd SMS - Logs",
+    "tags": ["logs", "loki"],
+    "timezone": "browser",
+    "editable": true,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Log Volume by Level",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "sum by (level) (count_over_time({job=\"bloomverd-sms\"}[1m]))",
+            "legendFormat": "{{level}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Logs/minute" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "sum(rate({job=\"bloomverd-sms\", level=\"error\"}[5m]))",
+            "legendFormat": "Errors/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          { "format": "short", "label": "Errors/sec" },
+          { "format": "short" }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Recent Error Logs",
+        "type": "logs",
+        "gridPos": { "x": 0, "y": 8, "w": 24, "h": 10 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", level=\"error\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "showCommonLabels": false,
+          "wrapLogMessage": false,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Logs by Context",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 18, "w": 12, "h": 8 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "sum by (context) (count_over_time({job=\"bloomverd-sms\"}[1m]))",
+            "legendFormat": "{{context}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Warning Logs",
+        "type": "logs",
+        "gridPos": { "x": 12, "y": 18, "w": 12, "h": 8 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", level=\"warn\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "wrapLogMessage": false,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 6,
+        "title": "HTTP Request Logs",
+        "type": "logs",
+        "gridPos": { "x": 0, "y": 26, "w": 12, "h": 10 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", context=\"HTTP\"}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "GraphQL Operation Logs",
+        "type": "logs",
+        "gridPos": { "x": 12, "y": 26, "w": 12, "h": 10 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", context=\"GraphQL\"}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Authentication Logs",
+        "type": "logs",
+        "gridPos": { "x": 0, "y": 36, "w": 12, "h": 10 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", context=\"Auth\"}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Database Logs",
+        "type": "logs",
+        "gridPos": { "x": 12, "y": 36, "w": 12, "h": 10 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{job=\"bloomverd-sms\", context=\"Database\"}",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "version": 1
+  }
+}
