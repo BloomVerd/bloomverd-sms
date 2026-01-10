@@ -5,9 +5,9 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { SemesterStatus } from '../../shared/enums';
 import { Class } from './class.entity';
 import { Course } from './course.entity';
-import { SemesterStatus } from 'src/shared/enums';
 
 @Entity('semesters')
 export class Semester {

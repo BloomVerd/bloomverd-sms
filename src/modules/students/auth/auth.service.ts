@@ -3,7 +3,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
@@ -22,6 +24,7 @@ export class AuthService {
     private readonly studentRepository: Repository<Student>,
     private jwtService: JwtService,
     private readonly authProducer: AuthProducer,
+    private readonly configService: ConfigService,
   ) {}
 
   async loginStudent({
@@ -51,26 +54,116 @@ export class AuthService {
         if (!isPasswordValid)
           throw new BadRequestException('Email or password is incorrect');
 
-        const payload: {
+        const access_token_payload: {
           id: string;
           name: string;
           email: string;
+          type: 'access_token' | 'refresh_token';
           role: 'STUDENT';
         } = {
           id: student.id,
           name: `${student.first_name} ${student.last_name}`,
           email: student.email,
+          type: 'access_token',
           role: 'STUDENT',
         };
 
-        const access_token = this.jwtService.sign(payload);
+        const refresh_token_payload: {
+          id: string;
+          type: 'access_token' | 'refresh_token';
+          role: 'STUDENT';
+        } = {
+          id: student.id,
+          type: 'refresh_token',
+          role: 'STUDENT',
+        };
+
+        const access_token = await this.jwtService.signAsync(
+          access_token_payload,
+          {
+            expiresIn: this.configService.get('JWT_ACCESS_TOKEN_TTL'),
+          },
+        );
+
+        const refresh_token = await this.jwtService.signAsync(
+          refresh_token_payload,
+          {
+            expiresIn: this.configService.get('JWT_REFRESH_TOKEN_TTL'),
+          },
+        );
 
         return {
           ...student,
           token: access_token,
+          refresh_token: refresh_token,
         };
       },
     );
+  }
+
+  async verifyRefreshToken({ refresh_token }: { refresh_token: string }) {
+    try {
+      const payload = await this.jwtService.verifyAsync(refresh_token);
+
+      if (payload.type !== 'refresh_token') {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      const student = await this.studentRepository.findOne({
+        where: { id: payload.id },
+      });
+
+      if (!student) {
+        throw new NotFoundException('Student not found');
+      }
+
+      const access_token_payload: {
+        id: string;
+        name: string;
+        email: string;
+        type: 'access_token' | 'refresh_token';
+        role: 'STUDENT';
+      } = {
+        id: student.id,
+        name: `${student.first_name} ${student.last_name}`,
+        email: student.email,
+        type: 'access_token',
+        role: 'STUDENT',
+      };
+
+      const refresh_token_payload: {
+        id: string;
+        type: 'access_token' | 'refresh_token';
+        role: 'STUDENT';
+      } = {
+        id: student.id,
+        type: 'refresh_token',
+        role: 'STUDENT',
+      };
+
+      const access_token = await this.jwtService.signAsync(
+        access_token_payload,
+        {
+          expiresIn: this.configService.get('JWT_ACCESS_TOKEN_TTL'),
+        },
+      );
+
+      const refresh_token_generated = await this.jwtService.signAsync(
+        refresh_token_payload,
+        {
+          expiresIn: this.configService.get('JWT_REFRESH_TOKEN_TTL'),
+        },
+      );
+
+      return {
+        ...student,
+        token: access_token,
+        refresh_token: refresh_token_generated,
+      };
+    } catch (error) {
+      this.logger.error('Invalid refresh token', JSON.stringify(error));
+      throw new BadRequestException('Invalid refresh token', error);
+    }
   }
 
   async requestPasswordReset(

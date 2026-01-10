@@ -1,5 +1,5 @@
-import { FileType } from 'src/shared/enums';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { FileType } from '../../shared/enums';
 import { Course } from './course.entity';
 
 @Entity('course_materials')

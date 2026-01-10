@@ -18,6 +18,13 @@ export class AuthResolver {
     return this.authService.loginOrganization({ email, password });
   }
 
+  @Query(() => OrganizationLoginResponse)
+  async verifyOrganizationRefreshToken(
+    @Args('refresh_token') refresh_token: string,
+  ) {
+    return this.authService.verifyRefreshToken({ refresh_token });
+  }
+
   // Mutations
   @Mutation(() => RegisterResponseType)
   async registerOrganization(

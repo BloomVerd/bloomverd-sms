@@ -4,7 +4,7 @@ import {
   FeeType,
   LevelType,
   StudentType,
-} from 'src/shared/enums';
+} from '../../shared/enums';
 import { Faculty } from './faculty.entity';
 
 @Entity('fees')

@@ -5,4 +5,7 @@ import { OrganizationTypeClass } from 'src/database/types';
 export class OrganizationLoginResponse extends OrganizationTypeClass {
   @Field()
   token: string;
+
+  @Field()
+  refresh_token: string;
 }

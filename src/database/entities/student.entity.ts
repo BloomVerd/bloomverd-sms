@@ -6,7 +6,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { StudentType, Gender } from '../../shared/enums';
+import { Gender, StudentType } from '../../shared/enums';
 import { Class } from './class.entity';
 import { Course } from './course.entity';
 
@@ -20,6 +20,12 @@ export class Student {
 
   @Column()
   last_name: string;
+
+  @Column()
+  name: string;
+
+  @Column()
+  profile_url: string;
 
   @Column({
     type: 'enum',

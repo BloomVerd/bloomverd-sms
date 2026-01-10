@@ -18,6 +18,12 @@ export class Lecturer {
   id: string;
 
   @Column()
+  name: string;
+
+  @Column()
+  profile_url: string;
+
+  @Column()
   first_name: string;
 
   @Column()

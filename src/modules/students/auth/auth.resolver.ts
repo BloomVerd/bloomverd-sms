@@ -23,6 +23,13 @@ export class AuthResolver {
     return this.authService.loginStudent({ email, password });
   }
 
+  @Query(() => StudentLoginResponse)
+  async verifyStudentRefreshToken(
+    @Args('refresh_token') refresh_token: string,
+  ) {
+    return this.authService.verifyRefreshToken({ refresh_token });
+  }
+
   // Mutations
   @Mutation(() => PasswordResetResponseType)
   async requestPasswordReset(

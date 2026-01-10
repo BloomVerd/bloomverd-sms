@@ -26,9 +26,6 @@ import { OrgService } from './org/org.service';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET'),
-        signOptions: {
-          expiresIn: 86400,
-        },
       }),
     }),
     TypeOrmModule.forFeature(entities),

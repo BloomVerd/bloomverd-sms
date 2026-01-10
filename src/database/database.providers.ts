@@ -14,6 +14,8 @@ const defaultPostgresDBConnection = (
   synchronize: configService.get('NODE_ENV') !== 'production',
   url: configService.get('DATABASE_URL'),
   entities: [__dirname + '/entities/*.entity{.ts,.js}'],
+  migrations: [__dirname + '/migrations/**/*{.js,.ts}'],
+  migrationsRun: false,
   ssl: {
     rejectUnauthorized: false, // allow self-signed AWS certs
   },

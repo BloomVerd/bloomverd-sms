@@ -5,4 +5,7 @@ import { StudentTypeClass } from 'src/database/types';
 export class StudentLoginResponse extends StudentTypeClass {
   @Field()
   token: string;
+
+  @Field()
+  refresh_token: string;
 }
