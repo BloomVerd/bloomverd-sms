@@ -10,4 +10,7 @@ export class OrganizationTypeClass {
 
   @Field()
   name: string;
+
+  @Field()
+  profile_url: string;
 }

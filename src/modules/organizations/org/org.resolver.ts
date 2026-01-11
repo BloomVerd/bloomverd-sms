@@ -11,6 +11,7 @@ import {
   FeeTypeClass,
   IecTypeClass,
   LecturerTypeClass,
+  OrganizationTypeClass,
   SemesterTypeClass,
   StudentTypeClass,
 } from 'src/database/types';
@@ -618,6 +619,21 @@ export class OrgResolver {
       organizationEmail: email,
       lecturers,
       departmentId,
+    });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => OrganizationTypeClass)
+  updateOrganizationProfileUrl(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('file', { type: () => GraphQLUpload, nullable: false })
+    file: FileUpload,
+  ) {
+    const { email } = context.req.user;
+
+    return this.orgService.updateProfileUrl({
+      organizationEmail: email,
+      file,
     });
   }
 }

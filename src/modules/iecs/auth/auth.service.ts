@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { HashHelper } from 'src/shared/helpers';
+import { AppLoggerService } from 'src/shared/services/logger.service';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { IecLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
@@ -14,6 +15,7 @@ export class AuthService {
     private iecRepository: Repository<Iec>,
     private jwtService: JwtService,
     private metricsService: MetricsService,
+    private logger: AppLoggerService,
   ) {}
 
   async registerIEC({
@@ -25,6 +27,8 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<{ message: string }> {
+    this.logger.log(`IEC registration attempt for: ${email}`, 'IECAuth');
+
     return await this.iecRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const existingIEC = await transactionalEntityManager.findOne(Iec, {
@@ -32,6 +36,10 @@ export class AuthService {
         });
 
         if (existingIEC) {
+          this.logger.warn(
+            `IEC registration failed: Email ${email} already exists`,
+            'IECAuth',
+          );
           throw new Error('IEC with this email already exists');
         }
 
@@ -41,6 +49,8 @@ export class AuthService {
         iec.password = await HashHelper.encrypt(password);
 
         await transactionalEntityManager.save(Iec, iec);
+
+        this.logger.log(`IEC registered successfully: ${email}`, 'IECAuth');
 
         return { message: 'IEC registered successfully' };
       },
@@ -54,6 +64,7 @@ export class AuthService {
     email: string;
     password: string;
   }): Promise<IecLoginResponse> {
+    this.logger.log(`Login attempt for IEC: ${email}`, 'IECAuth');
     this.metricsService.trackAuthenticationAttempt('login', 'iec');
 
     return this.iecRepository.manager.transaction(
@@ -63,6 +74,10 @@ export class AuthService {
         });
 
         if (!iec) {
+          this.logger.warn(
+            `Login failed: IEC not found for email ${email}`,
+            'IECAuth',
+          );
           this.metricsService.trackAuthenticationFailure(
             'login',
             'invalid_email',
@@ -77,6 +92,10 @@ export class AuthService {
         );
 
         if (!isPasswordValid) {
+          this.logger.warn(
+            `Login failed: Invalid password for IEC ${email}`,
+            'IECAuth',
+          );
           this.metricsService.trackAuthenticationFailure(
             'login',
             'invalid_password',
@@ -101,6 +120,11 @@ export class AuthService {
 
         this.metricsService.trackAuthenticationSuccess('login', 'iec');
         this.metricsService.incrementActiveSessions();
+
+        this.logger.log(
+          `Login successful for IEC: ${email} (ID: ${iec.id})`,
+          'IECAuth',
+        );
 
         return {
           ...iec,

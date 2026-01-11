@@ -133,6 +133,7 @@ export class AuthService {
   }
 
   async verifyRefreshToken({ refresh_token }: { refresh_token: string }) {
+    this.logger.log('Refresh token verification attempt', 'StudentAuth');
     this.metricsService.trackAuthenticationAttempt('refresh_token', 'student');
 
     try {
@@ -227,7 +228,10 @@ export class AuthService {
         'invalid_token',
         'student',
       );
-      this.logger.error('Invalid refresh token', JSON.stringify(error));
+      this.logger.error(
+        `Refresh token verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'StudentAuth',
+      );
       throw new BadRequestException('Invalid refresh token', error);
     }
   }
@@ -235,6 +239,8 @@ export class AuthService {
   async requestPasswordReset(
     email: string,
   ): Promise<{ message: string; resetToken: string }> {
+    this.logger.log(`Password reset requested for: ${email}`, 'StudentAuth');
+
     return this.studentRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const student = await transactionalEntityManager.findOne(Student, {
@@ -242,6 +248,10 @@ export class AuthService {
         });
 
         if (!student) {
+          this.logger.warn(
+            `Password reset failed: Student not found for email ${email}`,
+            'StudentAuth',
+          );
           throw new NotFoundException('Student with this email does not exist');
         }
 
@@ -262,7 +272,8 @@ export class AuthService {
         await this.authProducer.sendPasswordResetEmail({ email, resetToken });
 
         this.logger.log(
-          `Password reset email sent successfully: ${resetToken}`,
+          `Password reset email sent successfully for: ${email}`,
+          'StudentAuth',
         );
 
         return {
@@ -278,6 +289,8 @@ export class AuthService {
     token: string,
     newPassword: string,
   ): Promise<{ message: string }> {
+    this.logger.log(`Password reset attempt for: ${email}`, 'StudentAuth');
+
     return this.studentRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const student = await transactionalEntityManager.findOne(Student, {
@@ -287,6 +300,10 @@ export class AuthService {
         });
 
         if (!student) {
+          this.logger.warn(
+            `Password reset failed: Student not found for email ${email}`,
+            'StudentAuth',
+          );
           throw new BadRequestException('No student found');
         }
 
@@ -294,10 +311,18 @@ export class AuthService {
           student.reset_token === null ||
           student.reset_token_expires_at === null
         ) {
+          this.logger.warn(
+            `Password reset failed: No reset token for ${email}`,
+            'StudentAuth',
+          );
           throw new BadRequestException('No reset token provided');
         }
 
         if (student.reset_token_expires_at.valueOf() < new Date().valueOf()) {
+          this.logger.warn(
+            `Password reset failed: Token expired for ${email}`,
+            'StudentAuth',
+          );
           throw new BadRequestException('Reset token expired');
         }
 
@@ -307,6 +332,10 @@ export class AuthService {
         );
 
         if (!hashedResetToken) {
+          this.logger.warn(
+            `Password reset failed: Invalid token for ${email}`,
+            'StudentAuth',
+          );
           throw new BadRequestException('Invalid or expired reset token');
         }
 
@@ -317,6 +346,11 @@ export class AuthService {
         student.reset_token = '';
         student.reset_token_expires_at = new Date();
         await this.studentRepository.save(student);
+
+        this.logger.log(
+          `Password reset successful for: ${email}`,
+          'StudentAuth',
+        );
 
         return { message: 'Password reset successfully' };
       },

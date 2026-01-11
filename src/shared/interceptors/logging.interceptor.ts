@@ -76,6 +76,11 @@ export class LoggingInterceptor implements NestInterceptor {
     const url = request.url;
     const userId = request.user?.id;
 
+    // Skip logging for metrics endpoint
+    if (url === '/metrics') {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       tap({
         next: () => {

@@ -49,6 +49,9 @@ export class StudentTypeClass {
   @Field(() => Date)
   date_of_birth: Date;
 
+  @Field(() => String)
+  profile_url: string;
+
   @Field(() => [CourseTypeClass], { nullable: true })
   registered_courses: CourseTypeClass[];
 

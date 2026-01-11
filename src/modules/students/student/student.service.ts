@@ -1,17 +1,26 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { FileUpload } from 'graphql-upload';
+import { Fee } from 'src/database/entities/fee.entity';
+import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider';
+import { SemesterStatus } from 'src/shared/enums';
+import { MetricsService } from 'src/shared/services/metrics.service';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
-import { SemesterStatus } from 'src/shared/enums';
-import { Fee } from 'src/database/entities/fee.entity';
 
 @Injectable()
 export class StudentService {
+  private readonly logger = new Logger(StudentService.name);
+
   constructor(
     @InjectRepository(Student)
     private readonly studentRepository: Repository<Student>,
     @InjectRepository(Fee)
     private readonly feeRepository: Repository<Fee>,
+    private readonly uploadToAwsProvider: UploadToAwsProvider,
+    private readonly configService: ConfigService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   async getStudentSemesters(email: string) {
@@ -214,5 +223,58 @@ export class StudentService {
     });
 
     return fees;
+  }
+
+  async updateStudentProfileUrl({
+    email,
+    file,
+  }: {
+    email: string;
+    file: FileUpload;
+  }) {
+    const student = await this.studentRepository.findOne({
+      where: { email },
+    });
+
+    if (!student) {
+      this.logger.error('Student not found!');
+      throw new BadRequestException('Student not found!');
+    }
+
+    // Read the file stream and convert to buffer
+    const { createReadStream, filename, mimetype } = await file;
+    const stream = createReadStream();
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    const buffer = Buffer.concat(chunks);
+
+    // Create file object for AWS upload
+    const fileForUpload = {
+      buffer,
+      originalname: filename,
+      mimetype,
+      size: buffer.length,
+    } as Express.Multer.File;
+
+    // Upload to AWS
+    const path = await this.uploadToAwsProvider.fileupload(fileForUpload);
+
+    // Create CloudFront URL
+    const cloudfront_url = `https://${this.configService.get<string>('AWS_CLOUDFRONT_URL')}/${path}`;
+
+    // Update the student's profile_url
+    student.profile_url = cloudfront_url;
+    await this.studentRepository.save(student);
+
+    // Track file upload metrics
+    this.metricsService.trackFileUpload(mimetype, Boolean(buffer?.length));
+
+    this.logger.log(`Updated profile URL for student: ${student.id}`);
+
+    return student;
   }
 }

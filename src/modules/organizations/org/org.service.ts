@@ -2816,6 +2816,59 @@ export class OrgService {
     };
   }
 
+  async updateProfileUrl({
+    organizationEmail,
+    file,
+  }: {
+    organizationEmail: string;
+    file: FileUpload;
+  }) {
+    const organization = await this.organizationRepository.findOne({
+      where: { email: organizationEmail },
+    });
+
+    if (!organization) {
+      this.logger.error('Organization not found!');
+      throw new BadRequestException('Organization not found!');
+    }
+
+    // Read the file stream and convert to buffer
+    const { createReadStream, filename, mimetype } = await file;
+    const stream = createReadStream();
+    const chunks: Buffer[] = [];
+
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    const buffer = Buffer.concat(chunks);
+
+    // Create file object for AWS upload
+    const fileForUpload = {
+      buffer,
+      originalname: filename,
+      mimetype,
+      size: buffer.length,
+    } as Express.Multer.File;
+
+    // Upload to AWS
+    const path = await this.uploadToAwsProvider.fileupload(fileForUpload);
+
+    // Create CloudFront URL
+    const cloudfront_url = `https://${this.configService.get<string>('AWS_CLOUDFRONT_URL')}/${path}`;
+
+    // Update the organization's profile_url
+    organization.profile_url = cloudfront_url;
+    await this.organizationRepository.save(organization);
+
+    // Track file upload metrics
+    this.metricsService.trackFileUpload(mimetype, Boolean(buffer?.length));
+
+    this.logger.log(`Updated profile URL for organization: ${organization.id}`);
+
+    return organization;
+  }
+
   async setupActionProcessing({
     organizationEmail,
     colleges,

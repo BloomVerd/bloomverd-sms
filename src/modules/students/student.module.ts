@@ -5,12 +5,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { entities } from 'src/database/entities';
 import { JwtStrategy } from 'src/shared/strategies';
+import { UploadModule } from '../uploads/upload.module';
+import { AuthConsumer } from './auth/auth.consumer';
+import { AuthProducer } from './auth/auth.producer';
 import { AuthResolver } from './auth/auth.resolver';
 import { AuthService } from './auth/auth.service';
-import { AuthProducer } from './auth/auth.producer';
-import { AuthConsumer } from './auth/auth.consumer';
-import { StudentService } from './student/student.service';
 import { StudentResolver } from './student/student.resolver';
+import { StudentService } from './student/student.service';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { StudentResolver } from './student/student.resolver';
       }),
     }),
     TypeOrmModule.forFeature(entities),
+    UploadModule,
   ],
   controllers: [],
   providers: [

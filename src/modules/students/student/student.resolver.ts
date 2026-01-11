@@ -1,11 +1,13 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { FileUpload, GraphQLUpload } from 'graphql-upload';
 import {
   CourseExamResultTypeClass,
   CourseMaterialTypeClass,
   CourseTypeClass,
   FeeTypeClass,
   SemesterTypeClass,
+  StudentTypeClass,
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from 'src/shared/guards';
 import { StudentService } from './student.service';
@@ -74,6 +76,17 @@ export class StudentResolver {
   ) {
     const { email } = context.req.user;
     return this.studentService.getStudentFees({ email });
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Mutation(() => StudentTypeClass)
+  async updateStudentProfileUrl(
+    @Context() context: { req: { user: { email: string } } },
+    @Args('file', { type: () => GraphQLUpload, nullable: false })
+    file: FileUpload,
+  ) {
+    const { email } = context.req.user;
+    return this.studentService.updateStudentProfileUrl({ email, file });
   }
 }
 /// Add status to semesters
