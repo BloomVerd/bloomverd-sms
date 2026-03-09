@@ -46,6 +46,9 @@ export class StudentTypeClass {
   @Field(() => String)
   address: string;
 
+  @Field(() => Number)
+  year_group: number;
+
   @Field(() => Date)
   date_of_birth: Date;
 

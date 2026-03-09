@@ -24,8 +24,8 @@ export class Student {
   @Column()
   name: string;
 
-  @Column()
-  profile_url: string;
+  @Column({ nullable: true })
+  profile_url?: string;
 
   @Column({
     type: 'enum',

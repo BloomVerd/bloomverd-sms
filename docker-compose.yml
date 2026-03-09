@@ -1,0 +1,180 @@
+version: '3.9'
+
+services:
+  # Monitoring services
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bloomverd-prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - bloomverd-sms-network
+    restart: unless-stopped
+
+    depends_on:
+      - bloomverd-sms
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bloomverd-grafana
+    ports:
+      - '3001:3000'
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - bloomverd-sms-network
+
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Optional: Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: bloomverd-node-exporter
+    ports:
+      - '9100:9100'
+    networks:
+      - bloomverd-sms-network
+
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: bloomverd-loki
+    ports:
+      - '3100:3100'
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    networks:
+      - bloomverd-sms-network
+
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Promtail to ship logs from files to Loki
+  promtail:
+    image: grafana/promtail:latest
+    container_name: bloomverd-promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - ./logs:/var/log/bloomverd:ro
+    networks:
+      - bloomverd-sms-network
+
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # Application side services
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bloomverd-sms-db
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bloomverd-sms-network
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --requirepass password
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'password', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bloomverd-sms-network
+
+  bloomverd-sms:
+    image: fkaaziebu/bloomverd-sms
+    container_name: bloomverd-sms
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - '4000:4000'
+    networks:
+      - bloomverd-sms-network
+
+  bloomverd-sms-student-ui:
+    image: fkaaziebu/bloomverd-sms-student-ui
+    container_name: bloomverd-sms-student-ui
+    restart: unless-stopped
+    environment:
+      GRAPHQL_BASE_URL: http://18.195.133.100:4000/graphql
+      GRAPGQL_WS_BASE_URL: http://18.195.133.100:4000/graphql-ws
+    ports:
+      - '3000:3000'
+    networks:
+      - bloomverd-sms-network
+
+    depends_on:
+      - bloomverd-sms
+
+  bloomverd-sms-ui:
+    image: fkaaziebu/bloomverd-sms-ui
+    container_name: bloomverd-sms-ui
+    restart: unless-stopped
+    environment:
+      GRAPHQL_BASE_URL: http://18.195.133.100:4000/graphql
+      GRAPGQL_WS_BASE_URL: http://18.195.133.100:4000/graphql-ws
+    ports:
+      - '3001:3000'
+    networks:
+      - bloomverd-sms-network
+    depends_on:
+      - bloomverd-sms
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+
+networks:
+  bloomverd-sms-network:
+    driver: bridge

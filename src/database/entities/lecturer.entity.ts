@@ -20,7 +20,7 @@ export class Lecturer {
   @Column()
   name: string;
 
-  @Column()
+  @Column({ nullable: true })
   profile_url: string;
 
   @Column()

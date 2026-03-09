@@ -5,3 +5,4 @@ export * from './gender.enum';
 export * from './level_type.enum';
 export * from './semester-status.enum';
 export * from './student_type.enum';
+export * from './academic_structure.enum';

@@ -8,6 +8,8 @@ import { SemesterStatus } from 'src/shared/enums';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
+import { AcademicStructure, SemesterStatus } from 'src/shared/enums';
+import { Fee } from 'src/database/entities/fee.entity';
 
 @Injectable()
 export class StudentService {
@@ -33,6 +35,42 @@ export class StudentService {
       throw new BadRequestException('Student not found');
     }
     return student?.class?.semesters || [];
+  }
+
+  async getStudentAcademicStructure(email: string) {
+    const student = await this.studentRepository.findOne({
+      where: { email },
+      relations: [
+        'class.semesters',
+        'class.department.faculty.college.organization.setting',
+      ],
+    });
+
+    if (!student) {
+      throw new BadRequestException('Student not found');
+    }
+
+    if (
+      student.class.department.faculty.college.organization.setting
+        .academic_structure === AcademicStructure.ANNUAL
+    ) {
+      const oddSemesters = student.class.semesters.filter(
+        (sem) => sem.semester_number % 2 !== 0,
+      );
+      return oddSemesters.map((oddSem) => ({
+        label: `Year ${Math.ceil(oddSem.semester_number / 2)}`,
+        id: oddSem.id,
+        status: oddSem.status,
+      }));
+    }
+
+    return (
+      student?.class?.semesters.map((sem) => ({
+        label: `Semester ${sem.semester_number}`,
+        id: sem.id,
+        status: sem.status,
+      })) || []
+    );
   }
 
   async getStudentSemesterCourses({

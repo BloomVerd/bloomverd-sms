@@ -27,11 +27,16 @@ export class AppLoggerService implements NestLoggerService {
         new winston.transports.Console({
           format: winston.format.combine(
             winston.format.colorize(),
-            winston.format.printf(({ timestamp, level, message, context, ...meta }) => {
-              const contextStr = context ? `[${context}]` : '';
-              const metaStr = Object.keys(meta).length > 0 ? `\n${JSON.stringify(meta, null, 2)}` : '';
-              return `${timestamp} ${level} ${contextStr} ${message}${metaStr}`;
-            }),
+            winston.format.printf(
+              ({ timestamp, level, message, context, ...meta }) => {
+                const contextStr = context ? `[${context}]` : '';
+                const metaStr =
+                  Object.keys(meta).length > 0
+                    ? `\n${JSON.stringify(meta, null, 2)}`
+                    : '';
+                return `${timestamp} ${level} ${contextStr} ${message}${metaStr}`;
+              },
+            ),
           ),
         }),
         // File transport for errors
@@ -132,11 +137,7 @@ export class AppLoggerService implements NestLoggerService {
   }
 
   // Database query logging
-  logDatabaseQuery(
-    query: string,
-    duration: number,
-    parameters?: any[],
-  ): void {
+  logDatabaseQuery(query: string, duration: number, parameters?: any[]): void {
     this.logger.debug('Database Query', {
       context: 'Database',
       query,

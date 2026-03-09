@@ -19,8 +19,8 @@ export class Organization {
   @Column()
   name: string;
 
-  @Column()
-  profile_url: string;
+  @Column({ nullable: true })
+  profile_url?: string;
 
   @Column({ unique: true })
   email: string;

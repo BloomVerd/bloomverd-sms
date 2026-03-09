@@ -11,6 +11,7 @@ import {
 } from 'src/database/types';
 import { GqlJwtAuthGuard } from 'src/shared/guards';
 import { StudentService } from './student.service';
+import { StudentAcademicStructureResponse } from 'src/shared/types/student-academic-structure-response';
 
 @Resolver()
 export class StudentResolver {
@@ -23,6 +24,15 @@ export class StudentResolver {
   ) {
     const { email } = context.req.user;
     return this.studentService.getStudentSemesters(email);
+  }
+
+  @UseGuards(GqlJwtAuthGuard)
+  @Query(() => [StudentAcademicStructureResponse], { nullable: true })
+  async getStudentAcademicStructure(
+    @Context() context: { req: { user: { email: string } } },
+  ) {
+    const { email } = context.req.user;
+    return this.studentService.getStudentAcademicStructure(email);
   }
 
   @UseGuards(GqlJwtAuthGuard)

@@ -1,11 +1,12 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
+  // Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { AppLoggerService } from 'src/shared/services/logger.service';
 import { FileUpload } from 'graphql-upload';
 import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider';
 import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
@@ -27,7 +28,12 @@ import {
   Semester,
   Student,
 } from '../../../database/entities';
-import { FileType, Gender, SemesterStatus } from '../../../shared/enums';
+import {
+  AcademicStructure,
+  FileType,
+  Gender,
+  SemesterStatus,
+} from '../../../shared/enums';
 import {
   getDateValidationError,
   getEmailValidationError,
@@ -70,9 +76,8 @@ import { OrgProducer } from './org.producer';
 
 @Injectable()
 export class OrgService {
-  private readonly logger = new Logger(OrgService.name);
-
   constructor(
+    private logger: AppLoggerService,
     @InjectRepository(College)
     private collegeRepository: Repository<College>,
     @InjectRepository(Faculty)
@@ -267,7 +272,13 @@ export class OrgService {
             }
           }),
         );
-        return transactionalEntityManager.save(updatedSemesters);
+        const filteredSemesters = updatedSemesters.filter(
+          (semester) => semester !== undefined,
+        );
+        if (filteredSemesters.length === 0) {
+          return [];
+        }
+        return transactionalEntityManager.save(filteredSemesters);
       },
     );
   }
@@ -285,7 +296,10 @@ export class OrgService {
             where: {
               email: organizationEmail,
             },
-            relations: ['colleges.faculties.departments.classes.semesters'],
+            relations: [
+              'colleges.faculties.departments.classes.semesters',
+              'setting',
+            ],
           },
         );
 
@@ -308,16 +322,37 @@ export class OrgService {
                 (sem) => sem.semester_number === i,
               );
 
-              if (currentSemester?.status === SemesterStatus.IN_PROGRESS) {
+              if (
+                currentSemester?.status === SemesterStatus.IN_PROGRESS &&
+                organization.setting.academic_structure ===
+                  AcademicStructure.SEMESTER
+              ) {
                 currentSemester.status = SemesterStatus.COMPLETED;
-                return currentSemester;
+
+                return [currentSemester];
+              }
+
+              if (
+                currentSemester?.status === SemesterStatus.IN_PROGRESS &&
+                organization.setting.academic_structure ===
+                  AcademicStructure.ANNUAL
+              ) {
+                currentSemester.status = SemesterStatus.COMPLETED;
+                const nextSemester = cls.semesters.find(
+                  (semester) =>
+                    semester.semester_number ===
+                    currentSemester.semester_number + 1,
+                );
+                nextSemester!.status = SemesterStatus.COMPLETED;
+
+                return [currentSemester, nextSemester];
               }
             }
           }),
         );
-        const filteredSemesters = updatedSemesters.filter(
-          (semester) => semester !== undefined,
-        );
+        const filteredSemesters = updatedSemesters
+          .flat(1)
+          .filter((semester) => semester !== undefined);
         if (filteredSemesters.length === 0) {
           return [];
         }
@@ -914,6 +949,7 @@ export class OrgService {
             new_lecturer.email = lecturer.email;
             new_lecturer.first_name = lecturer.firstName;
             new_lecturer.last_name = lecturer.lastName;
+            new_lecturer.name = `${lecturer.firstName} ${lecturer.lastName}`;
             new_lecturer.gender = lecturer.gender;
             new_lecturer.phone_number = lecturer.phoneNumber;
             new_lecturer.address = lecturer.address;
@@ -1478,6 +1514,7 @@ export class OrgService {
             const new_student = new Student();
             new_student.first_name = student.firstName;
             new_student.last_name = student.lastName;
+            new_student.name = `${student.firstName} ${student.lastName}`;
             new_student.email = student.email;
             new_student.date_of_birth = student.dateOfBirth;
             new_student.gender = student.gender;
@@ -2309,6 +2346,7 @@ export class OrgService {
           id: filter?.departmentId ? filter.departmentId : undefined,
           faculty: {
             college: {
+              id: filter?.collegeId ? filter.collegeId : undefined,
               organization: {
                 email,
               },
@@ -2393,6 +2431,7 @@ export class OrgService {
       where: {
         first_name: searchTerm ? ILike(`%${searchTerm.trim()}%`) : undefined,
         last_name: searchTerm ? ILike(`%${searchTerm.trim()}%`) : undefined,
+        year_group: filter?.yearGroup ? filter.yearGroup : undefined,
         class: {
           id: filter?.classId ? filter.classId : undefined,
           department: {

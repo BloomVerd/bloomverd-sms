@@ -21,4 +21,7 @@ export class OrganizationStudentFilterInput {
     nullable: true,
   })
   classId?: string;
+
+  @Field({ nullable: true })
+  yearGroup?: number;
 }

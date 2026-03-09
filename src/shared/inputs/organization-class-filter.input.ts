@@ -6,4 +6,9 @@ export class OrganizationClassFilterInput {
     nullable: true,
   })
   departmentId?: string;
+
+  @Field({
+    nullable: true,
+  })
+  collegeId?: string;
 }
