@@ -176,7 +176,14 @@ export class AuthService {
         );
 
         return {
-          ...organization,
+          id: organization.id,
+          name: organization.name,
+          email: organization.email,
+          profile_url: organization.profile_url || '',
+          password: organization.password,
+          colleges: organization.colleges,
+          iec: organization.iec,
+          setting: organization.setting,
           token: access_token,
           refresh_token: refresh_token,
         };
@@ -272,7 +279,14 @@ export class AuthService {
       );
 
       return {
-        ...organization,
+        id: organization.id,
+        name: organization.name,
+        email: organization.email,
+        profile_url: organization.profile_url || '',
+        password: organization.password,
+        colleges: organization.colleges,
+        iec: organization.iec,
+        setting: organization.setting,
         token: access_token,
         refresh_token: refresh_token_generated,
       };

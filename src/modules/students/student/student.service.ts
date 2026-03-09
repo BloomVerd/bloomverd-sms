@@ -2,13 +2,12 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FileUpload } from 'graphql-upload';
-import { Fee } from 'src/database/entities/fee.entity';
 import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider';
 import { SemesterStatus } from 'src/shared/enums';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { Repository } from 'typeorm';
 import { Student } from '../../../database/entities';
-import { AcademicStructure, SemesterStatus } from 'src/shared/enums';
+import { AcademicStructure } from 'src/shared/enums';
 import { Fee } from 'src/database/entities/fee.entity';
 
 @Injectable()
