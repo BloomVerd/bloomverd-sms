@@ -28,7 +28,7 @@ services:
     image: grafana/grafana:latest
     container_name: bloomverd-grafana
     ports:
-      - '3001:3000'
+      - '3000:3000'
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -140,35 +140,6 @@ services:
       - '4000:4000'
     networks:
       - bloomverd-sms-network
-
-  bloomverd-sms-student-ui:
-    image: fkaaziebu/bloomverd-sms-student-ui
-    container_name: bloomverd-sms-student-ui
-    restart: unless-stopped
-    environment:
-      GRAPHQL_BASE_URL: http://18.195.133.100:4000/graphql
-      GRAPGQL_WS_BASE_URL: http://18.195.133.100:4000/graphql-ws
-    ports:
-      - '3000:3000'
-    networks:
-      - bloomverd-sms-network
-
-    depends_on:
-      - bloomverd-sms
-
-  bloomverd-sms-ui:
-    image: fkaaziebu/bloomverd-sms-ui
-    container_name: bloomverd-sms-ui
-    restart: unless-stopped
-    environment:
-      GRAPHQL_BASE_URL: http://18.195.133.100:4000/graphql
-      GRAPGQL_WS_BASE_URL: http://18.195.133.100:4000/graphql-ws
-    ports:
-      - '3001:3000'
-    networks:
-      - bloomverd-sms-network
-    depends_on:
-      - bloomverd-sms
 
 volumes:
   prometheus-data:

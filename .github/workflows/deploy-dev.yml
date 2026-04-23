@@ -1,4 +1,4 @@
-name: Codespartans CI/CD
+name: Blooomverd - SMS CI/CD
 
 on:
   push:
@@ -77,20 +77,13 @@ jobs:
 
             # Download docker-compose.yml from GitHub
             curl -L -o docker-compose.yml \
-              https://raw.githubusercontent.com/BloomVerd/bloomverd-sms/main/docker-compose.yml
-
-            curl -L -o docker-compose.yml \
-              https://raw.githubusercontent.com/BloomVerd/bloomverd-sms/main/docker-compose.monitoring.yml
+              https://raw.githubusercontent.com/BloomVerd/bloomverd-sms/refs/heads/main/docker-compose.yml
 
 
             # Verify the file
             echo "Downloaded docker-compose.yml:"
             cat docker-compose.yml
 
-            echo "Downloaded docker-compose.monitoring.yml:"
-            cat docker-compose.monitoring.yml
 
             # Start app
             docker compose up -d --remove-orphans
-            docker compose -f docker-compose.yml up -d
-            docker compose -f docker-compose.monitoring.yml up -d
