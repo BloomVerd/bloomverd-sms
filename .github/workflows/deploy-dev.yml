@@ -33,6 +33,16 @@ jobs:
             --push \
             .
 
+      # Copy monitoring folder to EC2
+      - name: Copy monitoring folder to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: 'monitoring'
+          target: '~/bloomverd'
+
       # Deploy on provisioned EC2
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
