@@ -17,11 +17,12 @@ export const configValidationSchema = Joi.object({
   THROTTLE_TTL: Joi.number().required(),
   THROTTLE_LIMIT: Joi.number().required(),
   DEFAULT_PROFILE_URL: Joi.string().required(),
-  CORS_ORIGIN: Joi.string().when('STAGE', {
-    is: 'production',
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
+  // CORS_ORIGIN: Joi.string().when('STAGE', {
+  //   is: 'production',
+  //   then: Joi.required(),
+  //   otherwise: Joi.optional(),
+  // }),
   JWT_ACCESS_TOKEN_TTL: Joi.number().required(),
   JWT_REFRESH_TOKEN_TTL: Joi.number().required(),
+  R2_ENDPOINT: Joi.string().required(),
 });

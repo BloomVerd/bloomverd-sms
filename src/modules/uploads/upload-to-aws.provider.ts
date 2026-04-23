@@ -1,38 +1,50 @@
+import { S3Client } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { Injectable, RequestTimeoutException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3 } from 'aws-sdk';
 import * as path from 'path';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class UploadToAwsProvider {
+  private readonly s3: S3Client;
   constructor(
     private readonly configService: ConfigService,
     private readonly metricsService: MetricsService,
-  ) {}
+  ) {
+    const endpoint = this.configService.get<string>('R2_ENDPOINT');
+    this.s3 = new S3Client({
+      region: 'auto',
+      endpoint,
+      credentials: {
+        accessKeyId: this.configService.getOrThrow('AWS_ACCESS_KEY_ID'),
+        secretAccessKey: this.configService.getOrThrow('AWS_SECRET_ACCESS_KEY'),
+      },
+    });
+  }
 
   public async fileupload(file: Express.Multer.File) {
-    const s3 = new S3();
     const fileType = this.getFileType(file.mimetype);
 
     try {
-      const uploadResult = await s3
-        .upload({
+      const uploadResult = await new Upload({
+        client: this.s3,
+        params: {
           Bucket:
             this.configService.get<string>('AWS_PUBLIC_BUCKET_NAME') || '',
-          Body: file.buffer,
           Key: this.generateFileName(file),
+          Body: file.buffer,
           ContentType: file.mimetype,
-        })
-        .promise(); // Promisify the request
+        },
+      }).done();
 
       // Track successful upload
       this.metricsService.trackFileUpload(fileType, true);
       this.metricsService.trackFileUploadSize(fileType, file.size);
 
       // Return the file name
-      return uploadResult.Key;
+      return uploadResult.Key || '';
     } catch (error) {
       // Track failed upload
       this.metricsService.trackFileUpload(fileType, false);

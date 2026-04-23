@@ -1,6 +1,5 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { config } from 'aws-sdk';
 import { graphqlUploadExpress } from 'graphql-upload';
 import helmet from 'helmet';
 import { Client } from 'pg';
@@ -38,16 +37,8 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('APP_PORT') || 3000;
+  const port = configService.get<number>('PORT') || 3000;
   const isProduction = configService.get<string>('STAGE') === 'production';
-
-  config.update({
-    credentials: {
-      accessKeyId: configService.get<string>('AWS_ACCESS_KEY_ID') || '',
-      secretAccessKey: configService.get<string>('AWS_SECRET_ACCESS_KEY') || '',
-    },
-    region: configService.get<string>('AWS_REGION'),
-  });
 
   // Security headers with Helmet
   app.use(
@@ -85,13 +76,15 @@ async function bootstrap() {
   );
 
   // CORS configuration
-  const corsOrigin = configService.get<string>('CORS_ORIGIN');
+  // const corsOrigin = configService.get<string>('CORS_ORIGIN');
   app.enableCors({
-    origin: isProduction
-      ? corsOrigin
-        ? corsOrigin.split(',').map((origin) => origin.trim())
-        : false
-      : '*',
+    origin: '*',
+    // isProduction
+    // ? corsOrigin
+    //   ? corsOrigin.split(',').map((origin) => origin.trim())
+    //   : false
+    // :
+
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     maxAge: 86400, // 24 hours
