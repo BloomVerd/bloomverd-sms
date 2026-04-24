@@ -17,7 +17,7 @@ const defaultPostgresDBConnection = (
   url: configService.get('DATABASE_URL'),
   entities: [__dirname + '/entities/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/**/*{.js,.ts}'],
-  migrationsRun: false,
+  migrationsRun: true,
   ssl: {
     rejectUnauthorized: false, // allow self-signed AWS certs
   },

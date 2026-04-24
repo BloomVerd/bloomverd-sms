@@ -12,26 +12,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Build and push Docker image
-      # - name: Set up QEMU
-      #   uses: docker/setup-qemu-action@v3
+      Build and push Docker image
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      # - name: Set up Docker Buildx
-      #   uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # - name: Log in to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # - name: Build and push Docker image
-      #   run: |
-      #     docker buildx build \
-      #       --platform linux/arm64 \
-      #       --tag ${{ secrets.DOCKER_USERNAME }}/bloomverd-sms:latest \
-      #       --push \
-      #       .
+      - name: Build and push Docker image
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --tag ${{ secrets.DOCKER_USERNAME }}/bloomverd-sms:latest \
+            --push \
+            .
 
       # Prepare EC2 directory (clear stale monitoring files owned by docker)
       - name: Prepare EC2 monitoring directory
