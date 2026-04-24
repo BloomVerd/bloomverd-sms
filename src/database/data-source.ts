@@ -6,7 +6,9 @@ import { DataSource } from 'typeorm';
 const envFile =
   process.env.NODE_ENV === 'test'
     ? '.env.test.local'
-    : '.env.development.local';
+    : process.env.NODE_ENV === 'development'
+      ? '.env.development.local'
+      : '.env';
 
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
