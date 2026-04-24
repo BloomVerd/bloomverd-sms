@@ -47,11 +47,11 @@ async function bootstrap() {
         ? {
             directives: {
               defaultSrc: ["'self'"],
-              styleSrc: ["'self'", "'unsafe-inline'"],
-              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://fonts.googleapis.com'],
+              scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
               imgSrc: ["'self'", 'data:', 'https:'],
               connectSrc: ["'self'"],
-              fontSrc: ["'self'"],
+              fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
               objectSrc: ["'none'"],
               mediaSrc: ["'self'"],
               frameSrc: ["'none'"],
@@ -79,15 +79,9 @@ async function bootstrap() {
   // const corsOrigin = configService.get<string>('CORS_ORIGIN');
   app.enableCors({
     origin: '*',
-    // isProduction
-    // ? corsOrigin
-    //   ? corsOrigin.split(',').map((origin) => origin.trim())
-    //   : false
-    // :
-
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-    maxAge: 86400, // 24 hours
+    credentials: false,
+    maxAge: 86400,
   });
 
   await app.listen(port);
