@@ -15,8 +15,6 @@ dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  migrationsRun: true,
-  synchronize: false, // turn to false in production
   entities: [__dirname + '/entities/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/**/*{.js,.ts}'],
   ssl:

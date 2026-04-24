@@ -13,7 +13,7 @@ const defaultPostgresDBConnection = (
 ): TypeOrmModuleOptions => ({
   type: 'postgres',
   autoLoadEntities: true,
-  synchronize: configService.get('NODE_ENV') !== 'production',
+  synchronize: true,
   url: configService.get('DATABASE_URL'),
   entities: [__dirname + '/entities/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/**/*{.js,.ts}'],
