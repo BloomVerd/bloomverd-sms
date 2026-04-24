@@ -60,13 +60,7 @@ async function bootstrap() {
         : false, // Disable CSP in development for GraphQL Playground
       crossOriginEmbedderPolicy: !isProduction, // Disable in dev for GraphQL Playground
       crossOriginResourcePolicy: { policy: 'cross-origin' },
-      hsts: isProduction
-        ? {
-            maxAge: 31536000,
-            includeSubDomains: true,
-            preload: true,
-          }
-        : false,
+      hsts: false,
     }),
   );
 
