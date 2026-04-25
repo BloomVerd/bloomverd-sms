@@ -44,6 +44,25 @@ export enum QuestionType {
 }
 ```
 
+### Entity: `Preamble`
+
+```
+src/modules/exams/test/entities/preamble.entity.ts
+```
+
+A preamble is an introductory block of text (passage, scenario, diagram description, etc.) that provides shared context for one or more sub-questions. When a student encounters a preamble, they read the body once and then answer every sub-question beneath it. Answers are submitted for the whole preamble in a single call, not question by question.
+
+Standalone questions (those with no preamble) continue to be submitted individually via `submitAnswer`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `body` | text | The shared introductory text shown above all sub-questions |
+| `test` | ManyToOne → Test | Owning side |
+| `questions` | OneToMany → Question | The sub-questions that belong to this preamble |
+
+Relation: A `Test` has many `Preamble`s (`@OneToMany` on `Test.preambles`).
+
 ### Entity: `Question`
 
 ```
@@ -58,9 +77,12 @@ src/modules/exams/test/entities/question.entity.ts
 | `options` | jsonb nullable | Array of `{ label: string; value: string }` — only for OBJECTIVE |
 | `correct_answer` | text nullable | For OBJECTIVE and FILL_IN; null for WRITTEN |
 | `marks` | integer | Points awarded for a correct answer |
-| `test` | ManyToOne → Test | Owning side |
+| `preamble` | ManyToOne → Preamble nullable | Set when the question belongs to a preamble; null for standalone questions |
+| `test` | ManyToOne → Test | Owning side — set on all questions regardless of preamble |
 
-Relation: A `Test` has many `Question`s (`@OneToMany` on `Test.questions`).
+Relations:
+- A `Test` has many standalone `Question`s (`@OneToMany` on `Test.questions`).
+- A `Preamble` has many `Question`s (`@OneToMany` on `Preamble.questions`).
 
 ### Entity: `TestSuite`
 
@@ -68,12 +90,13 @@ Relation: A `Test` has many `Question`s (`@OneToMany` on `Test.questions`).
 src/modules/exams/test/entities/test-suite.entity.ts
 ```
 
-A suite is a shuffled subset of questions drawn from the parent test's question pool. The lecturer configures how many suites to create and how many questions each suite should contain when calling `createTest`. Suites have no secret of their own — the secret lives on the `Test` and is used only to gate entry; suite assignment is random.
+A suite is a shuffled subset of the parent test's content pool. The pool is made up of two kinds of items: **standalone questions** and **preambles** (which each carry their sub-questions as an indivisible group). The lecturer configures how many suites to create and how many total questions (including preamble sub-questions) each suite should contain. Suites have no secret of their own — the secret lives on the `Test` and is used only to gate entry; suite assignment is random.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | uuid PK | |
-| `questions` | ManyToMany → Question | The specific questions in this suite (shuffled order) |
+| `questions` | ManyToMany → Question | Standalone questions selected for this suite |
+| `preambles` | ManyToMany → Preamble | Preambles selected for this suite (their sub-questions are included automatically) |
 | `test` | ManyToOne → Test | |
 
 Relation: A `Test` has many `TestSuite`s (`@OneToMany` on `Test.suites`).
@@ -99,7 +122,8 @@ src/modules/exams/test/entities/test.entity.ts
 | `secret` | string | Hashed passphrase set by the lecturer; all students use this single secret to access the test |
 | `course` | ManyToOne → Course | |
 | `lecturer` | ManyToOne → Lecturer | |
-| `questions` | OneToMany → Question | Full question pool |
+| `questions` | OneToMany → Question | Full pool of standalone questions (no preamble) |
+| `preambles` | OneToMany → Preamble | Full pool of preambles (each carries its own sub-questions) |
 | `suites` | OneToMany → TestSuite | Generated suites |
 | `attempts` | OneToMany → TestAttempt | |
 | `inserted_at` | CreateDateColumn | |
@@ -168,13 +192,15 @@ This ensures the attempt is always in a consistent state regardless of which pat
 
 When `createTest` is called the service must generate suites immediately:
 
-1. Take the full list of submitted questions (length = `N`).
-2. Hash the single `secret` from the input and store it on the `Test` record.
+1. Hash the single `secret` from the input and store it on the `Test` record.
+2. Build a flat list of **items** from the test content pool. Each item is either:
+   - A standalone `Question` (question count contribution = 1), or
+   - A `Preamble` (question count contribution = number of its sub-questions).
 3. For each suite (1..`total_suites`):
-   a. Shuffle a copy of the question array using a Fisher-Yates shuffle.
-   b. Slice the first `total_questions_per_suite` questions.
-   c. Create a `TestSuite` record with those questions — no secret on the suite.
-4. The same question can appear in multiple suites — this is intentional.
+   a. Shuffle a copy of the items array using a Fisher-Yates shuffle. **Preambles are shuffled as atomic units** — their sub-questions are never split across suites.
+   b. Greedily take items in shuffled order, accumulating their question counts, until the running total reaches `total_questions_per_suite`. If adding the next item would overshoot the target, skip it and continue with the remaining items (prefer filling exactly).
+   c. Create a `TestSuite` record linking the selected standalone questions and preambles — no secret on the suite.
+4. The same question or preamble can appear in multiple suites — this is intentional.
 
 ---
 
@@ -190,6 +216,7 @@ src/modules/exams/
     test.service.ts
     test.service.spec.ts
     entities/
+      preamble.entity.ts
       question.entity.ts
       test-suite.entity.ts
       test.entity.ts
@@ -200,13 +227,19 @@ src/modules/exams/
 ### Input Types (add to `src/shared/inputs/`)
 
 ```typescript
-// Question input used inside CreateTestInput
+// Used for both standalone questions and preamble sub-questions
 CreateQuestionInput {
   body: string
   type: QuestionType
   options?: { label: string; value: string }[]  // OBJECTIVE only
   correct_answer?: string
   marks: number
+}
+
+// A preamble groups related questions under shared introductory text
+CreatePreambleInput {
+  body: string                    // the shared context/passage
+  questions: CreateQuestionInput[] // sub-questions for this preamble; minimum 1
 }
 
 CreateTestInput {
@@ -220,8 +253,9 @@ CreateTestInput {
   total_suites: number
   total_questions_per_suite: number
   show_answer?: boolean
-  secret: string             // single plain-text passphrase; service hashes before storing on Test
-  questions: CreateQuestionInput[]
+  secret: string                  // single plain-text passphrase; service hashes before storing on Test
+  questions: CreateQuestionInput[] // standalone questions (no preamble)
+  preambles?: CreatePreambleInput[] // preamble blocks; optional if all questions are standalone
 }
 
 StartTestInput {
@@ -234,6 +268,7 @@ EndTestInput {
   attemptId: string
 }
 
+// For standalone questions only
 SubmitAnswerInput {
   attemptId: string
   questionId: string
@@ -241,9 +276,27 @@ SubmitAnswerInput {
   answer_text?: string       // FILL_IN or WRITTEN
 }
 
+// Per-question answer item used inside SubmitPreambleAnswersInput
+PreambleQuestionAnswerInput {
+  questionId: string
+  selected_option?: string
+  answer_text?: string
+}
+
+// Submits answers for every sub-question in a preamble in a single call
+SubmitPreambleAnswersInput {
+  attemptId: string
+  preambleId: string
+  answers: PreambleQuestionAnswerInput[]  // one entry per sub-question in the preamble
+}
+
 UpdateTestCompletionTimeInput {
-  testId: string             // extend time for all ON_GOING attempts on this test
+  testId: string                // required — scopes the operation to a specific test the lecturer owns
   additional_minutes: number
+  // Targeting — provide exactly one of the two options below:
+  classId?: string              // extend time for all ON_GOING attempts from students in this class
+  testAttemptIds?: string[]     // extend time for a specific list of attempt IDs
+  // If neither is provided, the update applies to ALL ON_GOING attempts for the test (full cohort).
 }
 
 ListTestAttemptsFilterInput {
@@ -278,15 +331,28 @@ endTest(input: EndTestInput!): TestAttempt
 
 submitAnswer(input: SubmitAnswerInput!): AnswerSubmission
   # Auth: Student
+  # For standalone questions only (question.preamble is null).
   # Applies auto-end logic first (may end the attempt before saving).
   # If attempt is ENDED after check, return error: attempt has ended.
   # Upserts AnswerSubmission for (attemptId, questionId).
 
+submitPreambleAnswers(input: SubmitPreambleAnswersInput!): [AnswerSubmission]
+  # Auth: Student
+  # For preamble-grouped questions. Submits all sub-question answers in one atomic call.
+  # Applies auto-end logic first; returns error if attempt is already ENDED.
+  # Each entry in input.answers upserts one AnswerSubmission for (attemptId, questionId).
+  # Validates that every questionId in input.answers belongs to the given preamble.
+  # Returns the full list of AnswerSubmissions for the preamble after upsert.
+
 updateTestCompletionTime(input: UpdateTestCompletionTimeInput!): [TestAttempt]
   # Auth: Lecturer
-  # Adds additional_minutes to extended_minutes on every ON_GOING attempt for the given test.
-  # Affects all suites — use when extending time for the entire cohort taking the test.
-  # Returns updated attempts.
+  # Adds additional_minutes to extended_minutes on the targeted ON_GOING attempts.
+  # Targeting precedence (mutually exclusive; validate that at most one is supplied):
+  #   - testAttemptIds supplied → update only those specific attempts
+  #   - classId supplied        → update all ON_GOING attempts whose student belongs to that class
+  #   - neither supplied        → update all ON_GOING attempts for the test (full cohort)
+  # Always scoped to testId — lecturer cannot modify attempts on a test they don't own.
+  # Returns the updated attempts.
 ```
 
 ### Queries
@@ -314,7 +380,7 @@ listTestAttempts(filter: ListTestAttemptsFilterInput!): [TestAttempt]
 
 ### Deterministic (OBJECTIVE, FILL_IN with `correct_answer` set)
 
-Run synchronously inside `endTest`:
+Run synchronously inside `endTest`. Applies equally to standalone questions and preamble sub-questions — grading is per `AnswerSubmission` regardless of how the answer was submitted:
 - Compare `selected_option` or `answer_text` (case-insensitive trim) against `question.correct_answer`.
 - Set `is_correct`, `marks_awarded = question.marks` if correct else `0`.
 
@@ -336,7 +402,7 @@ If `test.show_answer === false`, skip grading entirely.
 // exams.module.ts
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Test, TestSuite, Question, TestAttempt, AnswerSubmission]),
+    TypeOrmModule.forFeature([Test, TestSuite, Preamble, Question, TestAttempt, AnswerSubmission]),
     BullModule.registerQueue({ name: 'exam-grading-queue' }),
   ],
   providers: [TestResolver, TestService],
@@ -352,11 +418,12 @@ Register `ExamsModule` in `app.module.ts`.
 
 Implement unit tests for:
 
-- `createTest` — verifies suite count and question count per suite
+- `createTest` — verifies suite count and question count per suite; verifies preamble sub-questions are kept together in suites
 - `startTest` — rejects outside time window; rejects wrong secret; rejects duplicate active attempt; verifies random suite is assigned
-- `endTest` — idempotent; grades deterministic answers; queues non-deterministic jobs
-- `submitAnswer` — auto-ends expired attempt before saving; rejects submission on ended attempt
-- `updateTestCompletionTime` — updates `extended_minutes` on all ON_GOING attempts for the test (across all suites)
+- `endTest` — idempotent; grades deterministic answers (standalone and preamble sub-questions alike); queues non-deterministic jobs
+- `submitAnswer` — auto-ends expired attempt before saving; rejects submission on ended attempt; rejects if question belongs to a preamble (must use `submitPreambleAnswers`)
+- `submitPreambleAnswers` — auto-ends expired attempt; rejects on ended attempt; validates all questionIds belong to the preamble; upserts all answers atomically
+- `updateTestCompletionTime` — three modes: by specific attemptIds, by classId, or full cohort; rejects if both classId and testAttemptIds are supplied together
 - `getTestAttempt` — auto-ends expired attempt; hides answer fields when `show_answer=false`
 - `listTestAttempts` — filters by state; applies auto-end
 
