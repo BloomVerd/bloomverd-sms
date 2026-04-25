@@ -68,12 +68,11 @@ Relation: A `Test` has many `Question`s (`@OneToMany` on `Test.questions`).
 src/modules/exams/test/entities/test-suite.entity.ts
 ```
 
-A suite is a shuffled subset of questions drawn from the parent test's question pool. The lecturer configures how many suites to create and how many questions each suite should contain when calling `createTest`.
+A suite is a shuffled subset of questions drawn from the parent test's question pool. The lecturer configures how many suites to create and how many questions each suite should contain when calling `createTest`. Suites have no secret of their own — the secret lives on the `Test` and is used only to gate entry; suite assignment is random.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | uuid PK | |
-| `secret` | string | Hashed passphrase set by the lecturer; student must enter this to start |
 | `questions` | ManyToMany → Question | The specific questions in this suite (shuffled order) |
 | `test` | ManyToOne → Test | |
 
@@ -97,6 +96,7 @@ src/modules/exams/test/entities/test.entity.ts
 | `total_suites` | integer | Number of suites to generate |
 | `total_questions_per_suite` | integer | Questions per suite |
 | `show_answer` | boolean default false | Whether answers are revealed after the attempt ends |
+| `secret` | string | Hashed passphrase set by the lecturer; all students use this single secret to access the test |
 | `course` | ManyToOne → Course | |
 | `lecturer` | ManyToOne → Lecturer | |
 | `questions` | OneToMany → Question | Full question pool |
@@ -169,11 +169,12 @@ This ensures the attempt is always in a consistent state regardless of which pat
 When `createTest` is called the service must generate suites immediately:
 
 1. Take the full list of submitted questions (length = `N`).
-2. For each suite (1..`total_suites`):
+2. Hash the single `secret` from the input and store it on the `Test` record.
+3. For each suite (1..`total_suites`):
    a. Shuffle a copy of the question array using a Fisher-Yates shuffle.
    b. Slice the first `total_questions_per_suite` questions.
-   c. Create a `TestSuite` record with a unique hashed `secret` provided by the lecturer per suite (the mutation input must include one secret per suite).
-3. The same question can appear in multiple suites — this is intentional.
+   c. Create a `TestSuite` record with those questions — no secret on the suite.
+4. The same question can appear in multiple suites — this is intentional.
 
 ---
 
@@ -208,11 +209,6 @@ CreateQuestionInput {
   marks: number
 }
 
-// Suite secret input — one per suite
-CreateSuiteSecretInput {
-  secret: string   // plain text; service hashes before storing
-}
-
 CreateTestInput {
   title: string
   courseId: string
@@ -224,13 +220,14 @@ CreateTestInput {
   total_suites: number
   total_questions_per_suite: number
   show_answer?: boolean
+  secret: string             // single plain-text passphrase; service hashes before storing on Test
   questions: CreateQuestionInput[]
-  suite_secrets: CreateSuiteSecretInput[]   // length must equal total_suites
 }
 
 StartTestInput {
   testId: string
-  suite_secret: string   // plain-text secret; service matches against hashed suite secrets
+  secret: string             // plain-text; service bcrypt-compares against Test.secret
+                             // if correct, a suite is randomly selected for this student
 }
 
 EndTestInput {
@@ -245,13 +242,13 @@ SubmitAnswerInput {
 }
 
 UpdateTestCompletionTimeInput {
-  testId: string
-  suiteId: string            // extend time for all attempts on this suite
+  testId: string             // extend time for all ON_GOING attempts on this test
   additional_minutes: number
 }
 
 ListTestAttemptsFilterInput {
-  suiteId: string            // required
+  testId: string             // required
+  suiteId?: string           // optional — filter to attempts assigned a specific suite
   state?: TestAttemptState
 }
 ```
@@ -267,8 +264,9 @@ startTest(input: StartTestInput!): TestAttempt
   # Auth: Student
   # Guards:
   #   - now must be >= test.start_time and <= test.end_time
-  #   - suite_secret must match exactly one TestSuite.secret (bcrypt compare)
+  #   - input.secret must match Test.secret (bcrypt compare)
   #   - student must not already have an ON_GOING attempt for this test
+  # On success: randomly select one TestSuite from Test.suites and assign it to the new attempt.
   # Creates TestAttempt with state=ON_GOING, started_at=now.
 
 endTest(input: EndTestInput!): TestAttempt
@@ -286,7 +284,8 @@ submitAnswer(input: SubmitAnswerInput!): AnswerSubmission
 
 updateTestCompletionTime(input: UpdateTestCompletionTimeInput!): [TestAttempt]
   # Auth: Lecturer
-  # Adds additional_minutes to extended_minutes on every ON_GOING attempt for the given suite.
+  # Adds additional_minutes to extended_minutes on every ON_GOING attempt for the given test.
+  # Affects all suites — use when extending time for the entire cohort taking the test.
   # Returns updated attempts.
 ```
 
@@ -303,7 +302,8 @@ getTestAttempt(attemptId: String!): TestAttempt
 
 listTestAttempts(filter: ListTestAttemptsFilterInput!): [TestAttempt]
   # Auth: Lecturer only
-  # suiteId is mandatory.
+  # testId is mandatory.
+  # suiteId is optional — omit to list all attempts across all suites for the test.
   # Optional filter by state.
   # Applies auto-end logic to every ON_GOING attempt before returning.
 ```
@@ -353,10 +353,10 @@ Register `ExamsModule` in `app.module.ts`.
 Implement unit tests for:
 
 - `createTest` — verifies suite count and question count per suite
-- `startTest` — rejects outside time window; rejects wrong secret; rejects duplicate active attempt
+- `startTest` — rejects outside time window; rejects wrong secret; rejects duplicate active attempt; verifies random suite is assigned
 - `endTest` — idempotent; grades deterministic answers; queues non-deterministic jobs
 - `submitAnswer` — auto-ends expired attempt before saving; rejects submission on ended attempt
-- `updateTestCompletionTime` — updates `extended_minutes` only on ON_GOING attempts
+- `updateTestCompletionTime` — updates `extended_minutes` on all ON_GOING attempts for the test (across all suites)
 - `getTestAttempt` — auto-ends expired attempt; hides answer fields when `show_answer=false`
 - `listTestAttempts` — filters by state; applies auto-end
 
@@ -364,7 +364,7 @@ Implement unit tests for:
 
 ## Security Notes
 
-- Suite secrets are stored hashed (bcrypt). Never return raw or hashed secrets in any GraphQL response.
+- The test secret is stored hashed (bcrypt) on the `Test` entity. Never return the raw or hashed secret in any GraphQL response.
 - `startTest` must confirm the calling user is a student enrolled in the course.
 - `createTest` must confirm the calling user is the lecturer assigned to the course.
 - `listTestAttempts` and `updateTestCompletionTime` must confirm the calling user owns the test.
