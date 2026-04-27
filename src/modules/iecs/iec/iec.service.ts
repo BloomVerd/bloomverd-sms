@@ -6,12 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  CourseExam,
-  CourseExamResult,
-  Organization,
-  Student,
-} from '../../../database/entities';
+import { CourseExam } from '../../organizations/org/entities/course-exam.entity';
+import { CourseExamResult } from '../../organizations/org/entities/course-exam-result.entity';
+import { Organization } from '../../organizations/org/entities/organization.entity';
+import { Student } from '../../students/student/entities/student.entity';
 import { UploadExamResultsInput } from '../../../shared/inputs';
 
 @Injectable()

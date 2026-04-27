@@ -7,6 +7,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { configValidationSchema } from './config.schema';
 import { DatabaseModule } from './database/database.module';
+import { ExamsModule } from './modules/exams/exams.module';
 import { IecModule } from './modules/iecs/iec.module';
 import { OrganizationModule } from './modules/organizations/organization.module';
 import { StudentModule } from './modules/students/student.module';
@@ -52,6 +53,7 @@ import { SharedModule } from './shared/shared.module';
     OrganizationModule,
     StudentModule,
     IecModule,
+    ExamsModule,
   ],
   controllers: [],
   providers: [

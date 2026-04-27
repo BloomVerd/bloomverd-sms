@@ -6,7 +6,7 @@ import { AppLoggerService } from 'src/shared/services/logger.service';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { IecLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
-import { Iec } from '../../../database/entities';
+import { Iec } from '../iec/entities/iec.entity';
 
 @Injectable()
 export class AuthService {

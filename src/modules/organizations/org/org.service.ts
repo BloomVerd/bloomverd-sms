@@ -12,22 +12,20 @@ import { UploadToAwsProvider } from 'src/modules/uploads/upload-to-aws.provider'
 import { OrganizationFacultyFilterInput } from 'src/shared/inputs/organization-faculty-filter.input';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { ILike, Repository } from 'typeorm';
-import {
-  Class,
-  College,
-  Course,
-  CourseExam,
-  CourseExamResult,
-  CourseMaterial,
-  Department,
-  Faculty,
-  Fee,
-  Iec,
-  Lecturer,
-  Organization,
-  Semester,
-  Student,
-} from '../../../database/entities';
+import { Iec } from '../../iecs/iec/entities/iec.entity';
+import { Student } from '../../students/student/entities/student.entity';
+import { Class } from './entities/class.entity';
+import { College } from './entities/college.entity';
+import { Course } from './entities/course.entity';
+import { CourseExam } from './entities/course-exam.entity';
+import { CourseExamResult } from './entities/course-exam-result.entity';
+import { CourseMaterial } from './entities/course-material.entity';
+import { Department } from './entities/department.entity';
+import { Faculty } from './entities/faculty.entity';
+import { Fee } from './entities/fee.entity';
+import { Lecturer } from './entities/lecturer.entity';
+import { Organization } from './entities/organization.entity';
+import { Semester } from './entities/semester.entity';
 import {
   AcademicStructure,
   FileType,
@@ -2164,15 +2162,15 @@ export class OrgService {
           throw new BadRequestException('IEC not found');
         }
 
-        if (
-          existingIEC.organizations.find((org) => org.id === organization.id)
-        ) {
+        const iecOrganizations = await existingIEC.organizations;
+
+        if (iecOrganizations.find((org: any) => org.id === organization.id)) {
           throw new BadRequestException(
             'Organization already associated with IEC',
           );
         }
 
-        existingIEC.organizations.push(organization);
+        iecOrganizations.push(organization);
         return await transactionalEntityManager.save(existingIEC);
       },
     );

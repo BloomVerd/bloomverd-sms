@@ -7,13 +7,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { OrganizationSetting } from 'src/database/entities/organization_setting.entity';
+import { OrganizationSetting } from '../org/entities/organization_setting.entity';
 import { HashHelper } from 'src/shared/helpers';
 import { AppLoggerService } from 'src/shared/services/logger.service';
 import { MetricsService } from 'src/shared/services/metrics.service';
 import { OrganizationLoginResponse } from 'src/shared/types';
 import { Repository } from 'typeorm';
-import { Organization } from '../../../database/entities';
+import { Organization } from '../org/entities/organization.entity';
 
 @Injectable()
 export class AuthService {

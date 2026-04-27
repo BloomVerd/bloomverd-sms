@@ -1,8 +1,8 @@
 import { Field, ObjectType } from '@nestjs/graphql';
-import { OrganizationTypeClass } from 'src/database/types';
+import { Organization } from 'src/modules/organizations/org/entities/organization.entity';
 
 @ObjectType()
-export class OrganizationLoginResponse extends OrganizationTypeClass {
+export class OrganizationLoginResponse extends Organization {
   @Field()
   token: string;
 

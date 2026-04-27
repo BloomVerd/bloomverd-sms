@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Faculty, Organization } from 'src/database/entities';
-import { Fee } from 'src/database/entities/fee.entity';
+import { Faculty } from '../org/entities/faculty.entity';
+import { Fee } from '../org/entities/fee.entity';
+import { Organization } from '../org/entities/organization.entity';
 import { CreateFeeInput } from 'src/shared/inputs/create-fee.input';
 import { Repository } from 'typeorm';
 

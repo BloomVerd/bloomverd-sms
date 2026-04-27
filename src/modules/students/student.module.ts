@@ -3,9 +3,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { entities } from 'src/database/entities';
 import { JwtStrategy } from 'src/shared/strategies';
+import { Fee } from '../organizations/org/entities/fee.entity';
 import { UploadModule } from '../uploads/upload.module';
+import { Student } from './student/entities/student.entity';
 import { AuthConsumer } from './auth/auth.consumer';
 import { AuthProducer } from './auth/auth.producer';
 import { AuthResolver } from './auth/auth.resolver';
@@ -29,7 +30,7 @@ import { StudentService } from './student/student.service';
         },
       }),
     }),
-    TypeOrmModule.forFeature(entities),
+    TypeOrmModule.forFeature([Student, Fee]),
     UploadModule,
   ],
   controllers: [],

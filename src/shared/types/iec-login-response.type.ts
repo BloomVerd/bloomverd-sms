@@ -1,8 +1,8 @@
 import { Field, ObjectType } from '@nestjs/graphql';
-import { IecTypeClass } from 'src/database/types';
+import { Iec } from 'src/modules/iecs/iec/entities/iec.entity';
 
 @ObjectType()
-export class IecLoginResponse extends IecTypeClass {
+export class IecLoginResponse extends Iec {
   @Field()
   token: string;
 }
