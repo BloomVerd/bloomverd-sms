@@ -9,7 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
 import { Repository } from 'typeorm';
-import { Student } from '../../../database/entities';
+import { Student } from '../student/entities/student.entity';
 import { HashHelper } from '../../../shared/helpers';
 import { AppLoggerService } from '../../../shared/services/logger.service';
 import { MetricsService } from '../../../shared/services/metrics.service';

@@ -1,20 +1,18 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { FileUpload, GraphQLUpload } from 'graphql-upload';
-import {
-  ClassTypeClass,
-  CollegeTypeClass,
-  CourseMaterialTypeClass,
-  CourseTypeClass,
-  DepartmentTypeClass,
-  FacultyTypeClass,
-  FeeTypeClass,
-  IecTypeClass,
-  LecturerTypeClass,
-  OrganizationTypeClass,
-  SemesterTypeClass,
-  StudentTypeClass,
-} from 'src/database/types';
+import { Iec } from 'src/modules/iecs/iec/entities/iec.entity';
+import { Student } from 'src/modules/students/student/entities/student.entity';
+import { Class } from './entities/class.entity';
+import { College } from './entities/college.entity';
+import { Course } from './entities/course.entity';
+import { CourseMaterial } from './entities/course-material.entity';
+import { Department } from './entities/department.entity';
+import { Faculty } from './entities/faculty.entity';
+import { Fee } from './entities/fee.entity';
+import { Lecturer } from './entities/lecturer.entity';
+import { Organization } from './entities/organization.entity';
+import { Semester } from './entities/semester.entity';
 import { GqlJwtAuthGuard } from '../../../shared/guards';
 import {
   AddClassInput,
@@ -198,7 +196,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [FacultyTypeClass])
+  @Query(() => [Faculty])
   getOrganizationFaculties(
     @Context() context: { req: { user: { email: string } } },
     @Args('filter', {
@@ -215,7 +213,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CollegeTypeClass])
+  @Query(() => [College])
   getOrganizationColleges(
     @Context() context: { req: { user: { email: string } } },
   ) {
@@ -227,7 +225,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [DepartmentTypeClass])
+  @Query(() => [Department])
   getOrganizationDepartments(
     @Context() context: { req: { user: { email: string } } },
     @Args('filter', {
@@ -244,7 +242,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [ClassTypeClass])
+  @Query(() => [Class])
   getOrganizationClasses(
     @Context() context: { req: { user: { email: string } } },
     @Args('filter', {
@@ -261,7 +259,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CourseTypeClass])
+  @Query(() => [Course])
   getOrganizationClassCourses(
     @Context() context: { req: { user: { email: string } } },
     @Args('filter', {
@@ -326,7 +324,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => StudentTypeClass)
+  @Query(() => Student)
   getOrganizationStudent(
     @Context() context: { req: { user: { email: string } } },
     @Args('studentId', { type: () => String, nullable: false })
@@ -341,7 +339,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => LecturerTypeClass)
+  @Query(() => Lecturer)
   getOrganizationLecturer(
     @Context() context: { req: { user: { email: string } } },
     @Args('lecturerId', { type: () => String, nullable: false })
@@ -356,7 +354,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => FeeTypeClass)
+  @Query(() => Fee)
   getOrganizationFee(
     @Context() context: { req: { user: { email: string } } },
     @Args('feeId', { type: () => String, nullable: false })
@@ -372,7 +370,7 @@ export class OrgResolver {
 
   // Mutations
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass])
+  @Mutation(() => [Semester])
   setSemestersToInProgress(
     @Context() context: { req: { user: { email: string } } },
   ) {
@@ -384,7 +382,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [SemesterTypeClass], { nullable: true })
+  @Mutation(() => [Semester], { nullable: true })
   setSemesterToCompleted(
     @Context() context: { req: { user: { email: string } } },
   ) {
@@ -396,7 +394,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => IecTypeClass)
+  @Mutation(() => Iec)
   addOrganizationIEC(
     @Context() context: { req: { user: { email: string } } },
     @Args('iecEmail', {
@@ -414,7 +412,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [CourseMaterialTypeClass])
+  @Mutation(() => [CourseMaterial])
   uploadCourseMaterial(
     @Context() context: { req: { user: { email: string } } },
     @Args('courseId', { type: () => String!, nullable: false })
@@ -500,7 +498,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [CollegeTypeClass])
+  @Mutation(() => [College])
   addOrganizationColleges(
     @Context() context: { req: { user: { email: string } } },
     @Args('colleges', {
@@ -518,7 +516,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [FacultyTypeClass])
+  @Mutation(() => [Faculty])
   addOrganizationFaculties(
     @Context() context: { req: { user: { email: string } } },
     @Args('faculties', {
@@ -539,7 +537,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [FacultyTypeClass])
+  @Mutation(() => [Faculty])
   addOrganizationDepartments(
     @Context() context: { req: { user: { email: string } } },
     @Args('departments', {
@@ -560,7 +558,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [ClassTypeClass])
+  @Mutation(() => [Class])
   addOrganizationClasses(
     @Context() context: { req: { user: { email: string } } },
     @Args('classes', {
@@ -581,7 +579,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [StudentTypeClass])
+  @Mutation(() => [Student])
   addOrganizationStudents(
     @Context() context: { req: { user: { email: string } } },
     @Args('students', {
@@ -602,7 +600,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [StudentTypeClass])
+  @Mutation(() => [Student])
   addOrganizationLecturers(
     @Context() context: { req: { user: { email: string } } },
     @Args('lecturers', {
@@ -623,7 +621,7 @@ export class OrgResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => OrganizationTypeClass)
+  @Mutation(() => Organization)
   updateOrganizationProfileUrl(
     @Context() context: { req: { user: { email: string } } },
     @Args('file', { type: () => GraphQLUpload, nullable: false })

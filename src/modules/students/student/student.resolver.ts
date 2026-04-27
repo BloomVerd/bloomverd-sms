@@ -1,14 +1,12 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { FileUpload, GraphQLUpload } from 'graphql-upload';
-import {
-  CourseExamResultTypeClass,
-  CourseMaterialTypeClass,
-  CourseTypeClass,
-  FeeTypeClass,
-  SemesterTypeClass,
-  StudentTypeClass,
-} from 'src/database/types';
+import { Course } from 'src/modules/organizations/org/entities/course.entity';
+import { CourseExamResult } from 'src/modules/organizations/org/entities/course-exam-result.entity';
+import { CourseMaterial } from 'src/modules/organizations/org/entities/course-material.entity';
+import { Fee } from 'src/modules/organizations/org/entities/fee.entity';
+import { Semester } from 'src/modules/organizations/org/entities/semester.entity';
+import { Student } from './entities/student.entity';
 import { GqlJwtAuthGuard } from 'src/shared/guards';
 import { StudentService } from './student.service';
 import { StudentAcademicStructureResponse } from 'src/shared/types/student-academic-structure-response';
@@ -18,7 +16,7 @@ export class StudentResolver {
   constructor(private readonly studentService: StudentService) {}
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [SemesterTypeClass], { nullable: true })
+  @Query(() => [Semester], { nullable: true })
   async getStudentSemesters(
     @Context() context: { req: { user: { email: string } } },
   ) {
@@ -36,7 +34,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CourseTypeClass])
+  @Query(() => [Course])
   async getStudentSemesterCourses(
     @Context() context: { req: { user: { email: string } } },
     @Args('semesterId', { type: () => String }) semesterId: string,
@@ -46,7 +44,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CourseMaterialTypeClass])
+  @Query(() => [CourseMaterial])
   async getStudentCourseMaterials(
     @Context() context: { req: { user: { email: string } } },
     @Args('courseId', { type: () => String }) courseId: string,
@@ -56,7 +54,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [CourseExamResultTypeClass])
+  @Query(() => [CourseExamResult])
   async getStudentSemesterResults(
     @Context() context: { req: { user: { email: string } } },
     @Args('semesterId', { type: () => String }) semesterId: string,
@@ -66,7 +64,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => [CourseTypeClass])
+  @Mutation(() => [Course])
   async registerSemesterCoursesForStudent(
     @Context() context: { req: { user: { email: string } } },
     @Args('courseIds', { type: () => [String], nullable: true })
@@ -80,7 +78,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Query(() => [FeeTypeClass])
+  @Query(() => [Fee])
   async getStudentFees(
     @Context() context: { req: { user: { email: string } } },
   ) {
@@ -89,7 +87,7 @@ export class StudentResolver {
   }
 
   @UseGuards(GqlJwtAuthGuard)
-  @Mutation(() => StudentTypeClass)
+  @Mutation(() => Student)
   async updateStudentProfileUrl(
     @Context() context: { req: { user: { email: string } } },
     @Args('file', { type: () => GraphQLUpload, nullable: false })

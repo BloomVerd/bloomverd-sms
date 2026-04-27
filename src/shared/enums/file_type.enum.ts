@@ -1,3 +1,5 @@
+import { registerEnumType } from '@nestjs/graphql';
+
 export enum FileType {
   IMAGE = 'image',
   VIDEO = 'video',
@@ -6,3 +8,8 @@ export enum FileType {
   PDF = 'pdf',
   PPT = 'ppt',
 }
+
+registerEnumType(FileType, {
+  name: 'FileType',
+  description: 'File type of entity',
+});
